@@ -3,6 +3,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import tensorflow as tf
+import pyttsx3
+from datetime import datetime
 
 # Set up the app configuration
 st.set_page_config(page_title="EduSign", layout="wide", page_icon="🖐️")
@@ -26,6 +28,9 @@ hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_c
 
 # Gesture Classes Mapping
 gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}  # Add more as needed
+
+# Voice Feedback Engine
+engine = pyttsx3.init()
 
 # Helper Function: Extract Hand Region
 def extract_hand_region(frame, hand_landmarks):
@@ -55,11 +60,9 @@ def process_frame(frame):
 
     if result.multi_hand_landmarks:
         for hand_landmarks in result.multi_hand_landmarks:
-            mp_drawing.draw_landmarks(
-                frame, hand_landmarks, mp_hands.HAND_CONNECTIONS
-            )
-            
-            # Extract and preprocess the hand region
+            mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+
+            # Preprocess hand region
             hand_img = extract_hand_region(frame_rgb, hand_landmarks)
             if hand_img.size > 0:
                 hand_img_resized = cv2.resize(hand_img, (224, 224))
@@ -68,10 +71,14 @@ def process_frame(frame):
 
                 # Predict gesture
                 prediction = gesture_model.predict(input_data)
-                confidence = np.max(prediction)
                 predicted_class = np.argmax(prediction)
+                confidence = np.max(prediction)
+
+                # Debugging logs
+                print(f"Prediction: {prediction}, Class: {predicted_class}, Confidence: {confidence}")
 
     return frame, predicted_class, confidence
+
 
 # Webcam Feed Function
 def start_webcam(FRAME_WINDOW):
@@ -79,6 +86,8 @@ def start_webcam(FRAME_WINDOW):
     if not cap.isOpened():
         st.error("Unable to access the webcam. Please ensure your webcam is connected and accessible.")
         return
+
+    feedback_history = []  # Store feedback history
 
     while st.session_state.webcam_running:
         ret, frame = cap.read()
@@ -89,11 +98,46 @@ def start_webcam(FRAME_WINDOW):
         # Process the frame
         frame, predicted_class, confidence = process_frame(frame)
 
-        # Display prediction results
-        if predicted_class is not None:
-            class_name = gesture_classes.get(predicted_class, "Unknown Gesture")
-            st.markdown(f"**Detected Gesture:** {class_name}")
-            st.markdown(f"**Confidence Level:** {confidence * 100:.2f}%")
+        # Prepare feedback
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        feedback = {
+            "time": current_time,
+            "gesture": "Unknown Gesture" if predicted_class is None else gesture_classes.get(predicted_class, "Unknown Gesture"),
+            "confidence": confidence * 100 if confidence else 0,
+            "tips": [] if confidence and confidence >= 0.8 else [
+                "Ensure your hand is visible to the camera.",
+                "Avoid overlapping fingers.",
+                "Hold your hand steady."
+            ]
+        }
+
+        # Add feedback to history (latest feedback at the top)
+        feedback_history.insert(0, feedback)
+
+        # Display feedback in two columns
+        col1, col2 = st.columns(2)
+
+        # Column 1: Detected Gesture
+        with col1:
+            st.markdown("### Detected Gesture")
+            st.markdown(f"**Time:** {feedback['time']}")
+            st.markdown(f"**Gesture:** {feedback['gesture']}")
+            st.markdown(f"**Accuracy:** {feedback['confidence']:.2f}%")
+
+        # Column 2: Feedback and Tips
+        with col2:
+            st.markdown("### Feedback")
+            if feedback["confidence"] < 80:
+                st.warning("Low confidence detected. Try the following tips:")
+                for tip in feedback["tips"]:
+                    st.markdown(f"- {tip}")
+            else:
+                st.success("Great job! Your gesture is clear!")
+
+        # Display feedback history
+        st.markdown("### Feedback History")
+        for item in feedback_history[:5]:  # Display only the latest 5 entries
+            st.markdown(f"**[{item['time']}]** Gesture: {item['gesture']}, Accuracy: {item['confidence']:.2f}%")
 
         # Display the frame in the Streamlit app
         FRAME_WINDOW.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width=True)
@@ -114,26 +158,23 @@ if option == "Home":
 # Sign Language Tutor Page
 elif option == "Sign Language Tutor":
     st.title("🖐️ Sign Language Tutor")
-    st.markdown("**Type a word to learn its sign language and practice your gestures.**")
+    st.markdown("**Select a word to learn its sign language and practice your gestures.**")
 
-    # Input: Word to Learn
-    word_to_learn = st.text_input("Type the word you want to learn:", "Hello")
-    st.markdown(f"### Learning: **{word_to_learn.capitalize()}**")
+    # Dropdown for selecting a word to learn
+    word_to_learn = st.selectbox("Select the word you want to learn:", ["Hello", "Thank You"])
+    st.markdown(f"### Learning: **{word_to_learn}**")
 
-    # Display Tutorial Video Based on Input Word
+    # Display Tutorial Video Based on Selected Word
     videos = {
-        "hello": "https://www.youtube.com/watch?v=iRsWS96g1B8",
-        "thank you": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"  # Replace with actual video for "Thank You"
+        "Hello": "https://www.youtube.com/watch?v=iRsWS96g1B8",
+        "Thank You": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"  # Replace with actual video for "Thank You"
     }
 
     col1, col2 = st.columns([1, 1])  # Equal-sized columns
 
     with col1:
         st.markdown("### Instruction Video")
-        if word_to_learn.lower() in videos:
-            st.video(videos[word_to_learn.lower()], format="video/mp4", start_time=0)
-        else:
-            st.warning("No tutorial video available for this word.")
+        st.video(videos[word_to_learn], format="video/mp4", start_time=0)
 
     with col2:
         st.markdown("### Webcam Feed (Live Practice)")
