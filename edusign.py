@@ -3,7 +3,6 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import tensorflow as tf
-import time
 
 # Set up the app configuration
 st.set_page_config(page_title="EduSign", layout="wide", page_icon="🖐️")
@@ -11,7 +10,10 @@ st.set_page_config(page_title="EduSign", layout="wide", page_icon="🖐️")
 # Sidebar Navigation
 st.sidebar.title("EduSign")
 st.sidebar.markdown("### Empowering Communication Through Sign Language Learning")
-option = st.sidebar.radio("Choose a Learning Path", ["Home", "Sign Language Tutor", "Attend Online Classes"])
+option = st.sidebar.radio(
+    "Choose a Learning Path",
+    ["Home", "Sign Language Tutor", "Attend Online Classes"]
+)
 
 # Load Machine Learning Model
 MODEL_PATH = "/Users/raphael/edusign/sign_language_model.h5"
@@ -22,16 +24,81 @@ mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5)
 
+# Gesture Classes Mapping
+gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}  # Add more as needed
+
+# Helper Function: Extract Hand Region
+def extract_hand_region(frame, hand_landmarks):
+    h, w, _ = frame.shape
+    x_min = int(min([lm.x for lm in hand_landmarks.landmark]) * w)
+    x_max = int(max([lm.x for lm in hand_landmarks.landmark]) * w)
+    y_min = int(min([lm.y for lm in hand_landmarks.landmark]) * h)
+    y_max = int(max([lm.y for lm in hand_landmarks.landmark]) * h)
+
+    # Add padding to ensure hand is fully captured
+    padding = 20
+    x_min = max(x_min - padding, 0)
+    x_max = min(x_max + padding, w)
+    y_min = max(y_min - padding, 0)
+    y_max = min(y_max + padding, h)
+
+    # Crop the hand region
+    hand_img = frame[y_min:y_max, x_min:x_max]
+    return hand_img
+
 # Helper Function: Process Video Frame
 def process_frame(frame):
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     result = hands.process(frame_rgb)
+    predicted_class = None
+    confidence = None
+
     if result.multi_hand_landmarks:
         for hand_landmarks in result.multi_hand_landmarks:
             mp_drawing.draw_landmarks(
                 frame, hand_landmarks, mp_hands.HAND_CONNECTIONS
             )
-    return frame, result
+            
+            # Extract and preprocess the hand region
+            hand_img = extract_hand_region(frame_rgb, hand_landmarks)
+            if hand_img.size > 0:
+                hand_img_resized = cv2.resize(hand_img, (224, 224))
+                hand_img_normalized = hand_img_resized / 255.0  # Normalize pixel values
+                input_data = np.expand_dims(hand_img_normalized, axis=0)
+
+                # Predict gesture
+                prediction = gesture_model.predict(input_data)
+                confidence = np.max(prediction)
+                predicted_class = np.argmax(prediction)
+
+    return frame, predicted_class, confidence
+
+# Webcam Feed Function
+def start_webcam(FRAME_WINDOW):
+    cap = cv2.VideoCapture(0)  # Start the webcam
+    if not cap.isOpened():
+        st.error("Unable to access the webcam. Please ensure your webcam is connected and accessible.")
+        return
+
+    while st.session_state.webcam_running:
+        ret, frame = cap.read()
+        if not ret:
+            st.warning("Unable to read frames from the webcam. Exiting...")
+            break
+
+        # Process the frame
+        frame, predicted_class, confidence = process_frame(frame)
+
+        # Display prediction results
+        if predicted_class is not None:
+            class_name = gesture_classes.get(predicted_class, "Unknown Gesture")
+            st.markdown(f"**Detected Gesture:** {class_name}")
+            st.markdown(f"**Confidence Level:** {confidence * 100:.2f}%")
+
+        # Display the frame in the Streamlit app
+        FRAME_WINDOW.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width=True)
+
+    cap.release()  # Safely release the webcam
 
 # Home Page
 if option == "Home":
@@ -71,70 +138,18 @@ elif option == "Sign Language Tutor":
     with col2:
         st.markdown("### Webcam Feed (Live Practice)")
 
-        # Single checkbox to toggle webcam feed
-        webcam_running = st.checkbox("Start or Stop Webcam", value=False)
+        # Webcam State Management
+        if "webcam_running" not in st.session_state:
+            st.session_state.webcam_running = False
+
+        # Webcam Toggle Button
+        webcam_running = st.checkbox("Start Webcam", value=st.session_state.webcam_running)
+        st.session_state.webcam_running = webcam_running
+
         FRAME_WINDOW = st.image([])  # Placeholder for video stream
-        feedback_log = []  # List to store feedback history
-        last_feedback_message = None  # Track the last meaningful feedback message
 
-        if webcam_running:
-            cap = cv2.VideoCapture(0)  # Open webcam
-            while webcam_running:
-                ret, frame = cap.read()
-                if not ret:
-                    st.warning("Unable to access the webcam.")
-                    break
-
-                # Process the frame
-                frame, result = process_frame(frame)
-
-                # Gesture Recognition
-                current_feedback_message = "No hands detected. Raise your hands and ensure they are visible in the camera."
-                timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time()))
-                if result.multi_hand_landmarks:
-                    landmarks = []
-                    for hand_landmarks in result.multi_hand_landmarks:
-                        for lm in hand_landmarks.landmark:
-                            landmarks.extend([lm.x, lm.y, lm.z])
-
-                    # If landmarks match the model input size, predict gesture
-                    if len(landmarks) == gesture_model.input_shape[-1]:
-                        prediction = gesture_model.predict(np.array(landmarks).reshape(1, -1))
-                        predicted_class = np.argmax(prediction)
-                        accuracy = round(np.max(prediction) * 100, 2)  # Convert to percentage
-
-                        # Feedback for "Hello" Gesture
-                        if predicted_class == 0:  # Assuming 0 is "Hello"
-                            if accuracy >= 60:
-                                current_feedback_message = f"Great! You signed 'Hello' correctly with {accuracy}% accuracy."
-                            else:
-                                current_feedback_message = f"Hands detected, but the gesture isn't clear. Try signing 'Hello' again."
-                    else:
-                        current_feedback_message = "Hands detected, but landmarks are incomplete. Adjust hand visibility."
-
-                # Update feedback only on meaningful change
-                if current_feedback_message != last_feedback_message:
-                    last_feedback_message = current_feedback_message
-                    feedback_log.insert(0, {"message": current_feedback_message, "timestamp": timestamp})
-
-                # Display the processed video frame
-                FRAME_WINDOW.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width=True)
-
-                # Show the latest feedback
-                if feedback_log:
-                    st.markdown(f"**Latest Feedback ({feedback_log[0]['timestamp']}):** {feedback_log[0]['message']}")
-
-                # Compile all previous feedback into one collapsible section
-                if len(feedback_log) > 1:
-                    with st.expander("Previous Feedback"):
-                        for feedback in feedback_log[1:]:
-                            st.markdown(f"- ({feedback['timestamp']}) {feedback['message']}")
-
-                # Exit loop if the checkbox is unchecked
-                if not st.session_state.get("webcam_running"):
-                    break
-
-            cap.release()  # Release webcam resources safely
+        if st.session_state.webcam_running:
+            start_webcam(FRAME_WINDOW)
 
 # Attend Online Classes Page
 elif option == "Attend Online Classes":
