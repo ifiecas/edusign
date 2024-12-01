@@ -3,7 +3,6 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import tensorflow as tf
-import pyttsx3
 from datetime import datetime
 
 # Set up the app configuration
@@ -17,9 +16,14 @@ option = st.sidebar.radio(
     ["Home", "Sign Language Tutor", "Attend Online Classes"]
 )
 
-# Load Machine Learning Model
-MODEL_PATH = "/Users/raphael/edusign/sign_language_model.h5"
-gesture_model = tf.keras.models.load_model(MODEL_PATH)
+# Load Machine Learning Model with Error Handling
+MODEL_PATH = "/Users/raphael/signlanguage_tutor/sign_language_model_ver4.h5"
+try:
+    gesture_model = tf.keras.models.load_model(MODEL_PATH)
+    model_loaded = True
+except Exception as e:
+    st.error(f"Failed to load the model: {e}")
+    model_loaded = False
 
 # Mediapipe Hand Tracking
 mp_hands = mp.solutions.hands
@@ -27,10 +31,7 @@ mp_drawing = mp.solutions.drawing_utils
 hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5)
 
 # Gesture Classes Mapping
-gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}  # Add more as needed
-
-# Voice Feedback Engine
-engine = pyttsx3.init()
+gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}  # Defined gesture classes
 
 # Helper Function: Extract Hand Region
 def extract_hand_region(frame, hand_landmarks):
@@ -74,20 +75,14 @@ def process_frame(frame):
                 predicted_class = np.argmax(prediction)
                 confidence = np.max(prediction)
 
-                # Debugging logs
-                print(f"Prediction: {prediction}, Class: {predicted_class}, Confidence: {confidence}")
-
     return frame, predicted_class, confidence
 
-
 # Webcam Feed Function
-def start_webcam(FRAME_WINDOW):
+def start_webcam(FRAME_WINDOW, feedback_placeholder):
     cap = cv2.VideoCapture(0)  # Start the webcam
     if not cap.isOpened():
         st.error("Unable to access the webcam. Please ensure your webcam is connected and accessible.")
         return
-
-    feedback_history = []  # Store feedback history
 
     while st.session_state.webcam_running:
         ret, frame = cap.read()
@@ -100,47 +95,25 @@ def start_webcam(FRAME_WINDOW):
 
         # Prepare feedback
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        feedback = {
-            "time": current_time,
-            "gesture": "Unknown Gesture" if predicted_class is None else gesture_classes.get(predicted_class, "Unknown Gesture"),
-            "confidence": confidence * 100 if confidence else 0,
-            "tips": [] if confidence and confidence >= 0.8 else [
-                "Ensure your hand is visible to the camera.",
-                "Avoid overlapping fingers.",
-                "Hold your hand steady."
-            ]
-        }
-
-        # Add feedback to history (latest feedback at the top)
-        feedback_history.insert(0, feedback)
-
-        # Display feedback in two columns
-        col1, col2 = st.columns(2)
-
-        # Column 1: Detected Gesture
-        with col1:
-            st.markdown("### Detected Gesture")
-            st.markdown(f"**Time:** {feedback['time']}")
-            st.markdown(f"**Gesture:** {feedback['gesture']}")
-            st.markdown(f"**Accuracy:** {feedback['confidence']:.2f}%")
-
-        # Column 2: Feedback and Tips
-        with col2:
-            st.markdown("### Feedback")
-            if feedback["confidence"] < 80:
-                st.warning("Low confidence detected. Try the following tips:")
-                for tip in feedback["tips"]:
-                    st.markdown(f"- {tip}")
-            else:
-                st.success("Great job! Your gesture is clear!")
-
-        # Display feedback history
-        st.markdown("### Feedback History")
-        for item in feedback_history[:5]:  # Display only the latest 5 entries
-            st.markdown(f"**[{item['time']}]** Gesture: {item['gesture']}, Accuracy: {item['confidence']:.2f}%")
+        gesture = "Unknown Gesture" if predicted_class is None else gesture_classes.get(predicted_class, "Unknown Gesture")
+        confidence_percentage = confidence * 100 if confidence else 0
 
         # Display the frame in the Streamlit app
         FRAME_WINDOW.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width=True)
+
+        # Update real-time feedback in the placeholder
+        with feedback_placeholder.container():
+            st.markdown(f"### Real-Time Feedback")
+            st.markdown(f"**Time:** {current_time}")
+            st.markdown(f"**Gesture:** {gesture}")
+            st.markdown(f"**Accuracy:** {confidence_percentage:.2f}%")
+            if confidence and confidence < 0.8:
+                st.warning("Low confidence detected. Try the following tips:")
+                st.markdown("- Ensure your hand is visible to the camera.")
+                st.markdown("- Avoid overlapping fingers.")
+                st.markdown("- Hold your hand steady.")
+            elif confidence:
+                st.success("Great job! Your gesture is clear!")
 
     cap.release()  # Safely release the webcam
 
@@ -160,37 +133,46 @@ elif option == "Sign Language Tutor":
     st.title("🖐️ Sign Language Tutor")
     st.markdown("**Select a word to learn its sign language and practice your gestures.**")
 
-    # Dropdown for selecting a word to learn
-    word_to_learn = st.selectbox("Select the word you want to learn:", ["Hello", "Thank You"])
-    st.markdown(f"### Learning: **{word_to_learn}**")
+    # Check if the model was loaded successfully
+    if not model_loaded:
+        st.error("The gesture recognition model could not be loaded. Please check the model file and restart the application.")
+    else:
+        st.success("The gesture recognition model was loaded successfully!")
 
-    # Display Tutorial Video Based on Selected Word
-    videos = {
-        "Hello": "https://www.youtube.com/watch?v=iRsWS96g1B8",
-        "Thank You": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"  # Replace with actual video for "Thank You"
-    }
+        # Dropdown for selecting a word to learn
+        word_to_learn = st.selectbox("Select the word you want to learn:", ["Hello", "Thank You", "Yes", "No"])
+        st.markdown(f"### Learning: **{word_to_learn}**")
 
-    col1, col2 = st.columns([1, 1])  # Equal-sized columns
+        # Display Tutorial Video Based on Selected Word
+        videos = {
+            "Hello": "https://www.youtube.com/watch?v=iRsWS96g1B8",  # Replace with actual video for "Hello"
+            "Thank You": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",  # Replace with actual video for "Thank You"
+            "Yes": "https://www.youtube.com/watch?v=exampleYes",  # Replace with actual video for "Yes"
+            "No": "https://www.youtube.com/watch?v=exampleNo"  # Replace with actual video for "No"
+        }
 
-    with col1:
-        st.markdown("### Instruction Video")
-        st.video(videos[word_to_learn], format="video/mp4", start_time=0)
+        col1, col2 = st.columns([1, 1])  # Equal-sized columns
 
-    with col2:
-        st.markdown("### Webcam Feed (Live Practice)")
+        with col1:
+            st.markdown("### Instruction Video")
+            st.video(videos[word_to_learn], format="video/mp4", start_time=0)
 
-        # Webcam State Management
-        if "webcam_running" not in st.session_state:
-            st.session_state.webcam_running = False
+        with col2:
+            st.markdown("### Webcam Feed (Live Practice)")
 
-        # Webcam Toggle Button
-        webcam_running = st.checkbox("Start Webcam", value=st.session_state.webcam_running)
-        st.session_state.webcam_running = webcam_running
+            # Webcam State Management
+            if "webcam_running" not in st.session_state:
+                st.session_state.webcam_running = False
 
-        FRAME_WINDOW = st.image([])  # Placeholder for video stream
+            # Webcam Toggle Button
+            webcam_running = st.checkbox("Start Webcam", value=st.session_state.webcam_running)
+            st.session_state.webcam_running = webcam_running
 
-        if st.session_state.webcam_running:
-            start_webcam(FRAME_WINDOW)
+            FRAME_WINDOW = st.image([])  # Placeholder for video stream
+            feedback_placeholder = st.empty()  # Placeholder for feedback
+
+            if st.session_state.webcam_running:
+                start_webcam(FRAME_WINDOW, feedback_placeholder)
 
 # Attend Online Classes Page
 elif option == "Attend Online Classes":
