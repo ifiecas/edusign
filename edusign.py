@@ -107,7 +107,7 @@ def start_webcam(FRAME_WINDOW, feedback_placeholder):
             st.markdown(f"**Time:** {current_time}")
             st.markdown(f"**Gesture:** {gesture}")
             st.markdown(f"**Accuracy:** {confidence_percentage:.2f}%")
-            if confidence and confidence < 0.8:
+            if confidence and confidence < 0.4:
                 st.warning("Low confidence detected. Try the following tips:")
                 st.markdown("- Ensure your hand is visible to the camera.")
                 st.markdown("- Avoid overlapping fingers.")
