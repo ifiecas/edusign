@@ -16,12 +16,16 @@ if 'transcription_running' not in st.session_state:
     st.session_state.transcription_running = False
 if 'transcription_text' not in st.session_state:
     st.session_state.transcription_text = ""
+if 'usage_count' not in st.session_state:
+    st.session_state.usage_count = 0  # Track user activity
+if 'user_level' not in st.session_state:
+    st.session_state.user_level = "Beginner"  # Initial level
 
 # Sidebar Navigation
 st.sidebar.title("EduSign")
 st.sidebar.markdown("### AI-Powered Sign Language Tutor")
 st.sidebar.markdown("Empowering Communication Through Sign Language Learning")
-page = st.sidebar.radio("Choose a feature", ["Sign Language Tutor", "Sign Language to Text"])
+page = st.sidebar.radio("Choose a feature", ["Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
 # Load Machine Learning Model
 @st.cache_resource
@@ -153,32 +157,6 @@ def detect_gesture(frame):
     
     return frame, prediction, confidence
 
-def transcription_feed(frame_placeholder, transcription_placeholder):
-    """Handle real-time transcription from the camera."""
-    cap = cv2.VideoCapture(0)
-    
-    if not cap.isOpened():
-        st.error("Cannot access webcam. Please check your camera connection.")
-        return
-
-    try:
-        while st.session_state.transcription_running:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            frame, gesture, confidence = detect_gesture(frame)
-            frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width="always")
-            
-            if gesture and confidence > 0.8:
-                st.session_state.transcription_text += f"{gesture} "
-                transcription_placeholder.markdown(
-                    f'<div class="transcription-box">{st.session_state.transcription_text.strip()}</div>', 
-                    unsafe_allow_html=True
-                )
-    finally:
-        cap.release()
-
 def process_frame(frame, selected_gesture):
     """Process the webcam frame to detect and classify gestures with feedback."""
     frame, prediction, confidence = detect_gesture(frame)
@@ -224,7 +202,16 @@ def start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture)
     finally:
         cap.release()
 
-# EduSign - AI Powered Sign Language Tutor Page
+def evaluate_user_level():
+    """Evaluate the user's skill level based on usage."""
+    if st.session_state.usage_count < 10:
+        st.session_state.user_level = "Beginner"
+    elif st.session_state.usage_count < 30:
+        st.session_state.user_level = "Intermediate"
+    else:
+        st.session_state.user_level = "Expert"
+
+# Main pages logic
 if page == "Sign Language Tutor":
     st.title("🖐️ EduSign - AI Powered Sign Language Tutor")
     if not model_loaded:
@@ -272,9 +259,11 @@ if page == "Sign Language Tutor":
             
             if st.button("Toggle Webcam"):
                 st.session_state.webcam_running = not st.session_state.webcam_running
+                st.session_state.usage_count += 1  # Increment usage count
+                evaluate_user_level()  # Update user level
             st.markdown(f"Status: {'🟢 Active' if st.session_state.webcam_running else '🔴 Inactive'}")
+            st.markdown(f"Skill Level: **{st.session_state.user_level}**")
 
-# Sign Language to Text Page
 elif page == "Sign Language to Text":
     st.title("🖐️ Sign Language to Text")
 
@@ -314,10 +303,26 @@ elif page == "Sign Language to Text":
 
         # Toggle transcription feed
         if st.session_state.transcription_running:
-            transcription_feed(frame_placeholder, transcription_placeholder)
+            cap = cv2.VideoCapture(0)
+            if cap.isOpened():
+                while st.session_state.transcription_running:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    frame, gesture, confidence = detect_gesture(frame)
+                    frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width="always")
+                    if gesture and confidence > 0.8:
+                        st.session_state.transcription_text += f"{gesture} "
+                        transcription_placeholder.markdown(
+                            f'<div class="transcription-box">{st.session_state.transcription_text.strip()}</div>', 
+                            unsafe_allow_html=True
+                        )
+                cap.release()
 
         if st.button("Toggle Transcription"):
             st.session_state.transcription_running = not st.session_state.transcription_running
+            st.session_state.usage_count += 1
+            evaluate_user_level()
 
         # Options for download and listen
         st.markdown("### Options")
@@ -335,3 +340,21 @@ elif page == "Sign Language to Text":
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
                     tts.save(tmp_file.name)
                     st.audio(tmp_file.name)
+
+elif page == "Connect to a Mentor":
+    st.title("🖐️ Connect to a Mentor")
+
+    st.markdown(f"### Your Skill Level: **{st.session_state.user_level}**")
+    st.markdown("Our mentors are here to guide you at your pace. Based on your level, we recommend:")
+
+    mentors = {
+        "Beginner": "Alex - Specializes in foundational signs and building confidence.",
+        "Intermediate": "Jordan - Helps with fluency and transitioning to conversational signing.",
+        "Expert": "Taylor - Expert in advanced and specialized signing techniques."
+    }
+
+    mentor = mentors.get(st.session_state.user_level, "Alex")
+    st.markdown(f"#### Recommended Mentor: **{mentor}**")
+    st.markdown("Click below to schedule a session:")
+    if st.button("Schedule Session"):
+        st.success("Mentor session scheduled successfully!")
