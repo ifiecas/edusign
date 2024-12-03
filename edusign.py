@@ -3,6 +3,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import tensorflow as tf
+from gtts import gTTS
+import tempfile
 
 # Page Configuration
 st.set_page_config(page_title="EduSign - AI Powered Sign Language Tutor", layout="wide", page_icon="🖐️")
@@ -10,11 +12,16 @@ st.set_page_config(page_title="EduSign - AI Powered Sign Language Tutor", layout
 # Initialize session states
 if 'webcam_running' not in st.session_state:
     st.session_state.webcam_running = False
+if 'transcription_running' not in st.session_state:
+    st.session_state.transcription_running = False
+if 'transcription_text' not in st.session_state:
+    st.session_state.transcription_text = ""
 
 # Sidebar Navigation
 st.sidebar.title("EduSign")
 st.sidebar.markdown("### AI-Powered Sign Language Tutor")
 st.sidebar.markdown("Empowering Communication Through Sign Language Learning")
+page = st.sidebar.radio("Choose a feature", ["Sign Language Tutor", "Sign Language to Text"])
 
 # Load Machine Learning Model
 @st.cache_resource
@@ -36,8 +43,6 @@ hands = mp_hands.Hands(
     max_num_hands=2,
     min_detection_confidence=0.5
 )
-
-
 
 # Gesture Classes and Learning Guides
 gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}
@@ -115,12 +120,8 @@ learning_guides = {
     }
 }
 
-
-
-
-
-
-def process_frame(frame, selected_gesture):
+def detect_gesture(frame):
+    """Detect gestures and return the gesture and confidence."""
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = hands.process(frame_rgb)
     prediction = None
@@ -149,9 +150,40 @@ def process_frame(frame, selected_gesture):
                 pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
                 prediction = gesture_classes.get(np.argmax(pred))
                 confidence = float(np.max(pred))
+    
+    return frame, prediction, confidence
 
-    # Determine feedback based on the selected word and detected gesture
+def transcription_feed(frame_placeholder, transcription_placeholder):
+    """Handle real-time transcription from the camera."""
+    cap = cv2.VideoCapture(0)
+    
+    if not cap.isOpened():
+        st.error("Cannot access webcam. Please check your camera connection.")
+        return
+
+    try:
+        while st.session_state.transcription_running:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            frame, gesture, confidence = detect_gesture(frame)
+            frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width="always")
+            
+            if gesture and confidence > 0.8:
+                st.session_state.transcription_text += f"{gesture} "
+                transcription_placeholder.markdown(
+                    f'<div class="transcription-box">{st.session_state.transcription_text.strip()}</div>', 
+                    unsafe_allow_html=True
+                )
+    finally:
+        cap.release()
+
+def process_frame(frame, selected_gesture):
+    """Process the webcam frame to detect and classify gestures with feedback."""
+    frame, prediction, confidence = detect_gesture(frame)
     feedback = None
+
     if prediction is None:
         feedback = "No hand detected. Make sure your hand is visible to the camera."
     elif prediction != selected_gesture:
@@ -164,6 +196,7 @@ def process_frame(frame, selected_gesture):
     return frame, prediction, confidence, feedback
 
 def start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture):
+    """Start the webcam feed for practicing gestures."""
     cap = cv2.VideoCapture(0)
     
     if not cap.isOpened():
@@ -191,52 +224,114 @@ def start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture)
     finally:
         cap.release()
 
-# Sign Language Tutor Page
-st.title("🖐️ EduSign - AI Powered Sign Language Tutor")
+# EduSign - AI Powered Sign Language Tutor Page
+if page == "Sign Language Tutor":
+    st.title("🖐️ EduSign - AI Powered Sign Language Tutor")
+    if not model_loaded:
+        st.error("Model not loaded. Please check the model file and restart.")
+    else:
+        selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### Tutorial Video")
+            st.markdown("""
+                <div style="width: 100%; position: relative; padding-top: 56.25%;">
+                    <iframe 
+                        src="https://www.youtube.com/embed/iRsWS96g1B8"
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
+                        frameborder="0" 
+                        allowfullscreen>
+                    </iframe>
+                </div>
+            """, unsafe_allow_html=True)
 
-if not model_loaded:
-    st.error("Model not loaded. Please check the model file and restart.")
-else:
-    selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### Tutorial Video")
+            st.markdown("### Learning Guide")
+            guide = learning_guides.get(selected_gesture, {})
+            
+            st.markdown("#### Steps:")
+            for step in guide.get("steps", []):
+                st.markdown(f"• {step}")
+            
+            st.markdown("#### Pro Tips:")
+            for tip in guide.get("tips", []):
+                st.markdown(f"• {tip}")
+            
+            st.markdown("#### Common Mistakes:")
+            for mistake in guide.get("mistakes", []):
+                st.markdown(f"• {mistake}")
+        
+        with col2:
+            st.markdown("### Practice Area")
+            frame_placeholder = st.empty()
+            feedback_placeholder = st.empty()
+            
+            if st.session_state.webcam_running:
+                start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture)
+            
+            if st.button("Toggle Webcam"):
+                st.session_state.webcam_running = not st.session_state.webcam_running
+            st.markdown(f"Status: {'🟢 Active' if st.session_state.webcam_running else '🔴 Inactive'}")
+
+# Sign Language to Text Page
+elif page == "Sign Language to Text":
+    st.title("🖐️ Sign Language to Text")
+
+    if not model_loaded:
+        st.error("Model not loaded. Please check the model file and restart.")
+    else:
         st.markdown("""
-            <div style="width: 100%; position: relative; padding-top: 56.25%;">
-                <iframe 
-                    src="https://www.youtube.com/embed/iRsWS96g1B8"
-                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-                    frameborder="0" 
-                    allowfullscreen>
-                </iframe>
-            </div>
+        <style>
+            .transcription-box {
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                font-size: 1.5rem;
+                color: #333;
+                text-align: center;
+                margin-top: 20px;
+            }
+        </style>
         """, unsafe_allow_html=True)
 
-        st.markdown("### Learning Guide")
-        guide = learning_guides.get(selected_gesture, {})
+        st.markdown("### Real-Time Transcription")
+
+        # Layout for webcam and transcription
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            st.markdown("### Webcam Feed")
+            frame_placeholder = st.empty()
+
+        with col2:
+            st.markdown("### Transcribed Text")
+            transcription_placeholder = st.markdown(
+                '<div class="transcription-box">Waiting for transcription...</div>', 
+                unsafe_allow_html=True
+            )
+
+        # Toggle transcription feed
+        if st.session_state.transcription_running:
+            transcription_feed(frame_placeholder, transcription_placeholder)
+
+        if st.button("Toggle Transcription"):
+            st.session_state.transcription_running = not st.session_state.transcription_running
+
+        # Options for download and listen
+        st.markdown("### Options")
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            if st.button("Download Transcription"):
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_file:
+                    tmp_file.write(st.session_state.transcription_text.encode())
+                    st.download_button("Download", tmp_file.name, "transcription.txt")
         
-        st.markdown("#### Steps:")
-        for step in guide.get("steps", []):
-            st.markdown(f"• {step}")
-        
-        st.markdown("#### Pro Tips:")
-        for tip in guide.get("tips", []):
-            st.markdown(f"• {tip}")
-        
-        st.markdown("#### Common Mistakes:")
-        for mistake in guide.get("mistakes", []):
-            st.markdown(f"• {mistake}")
-    
-    with col2:
-        st.markdown("### Practice Area")
-        frame_placeholder = st.empty()
-        feedback_placeholder = st.empty()
-        
-        if st.session_state.webcam_running:
-            start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture)
-        
-        if st.button("Toggle Webcam"):
-            st.session_state.webcam_running = not st.session_state.webcam_running
-        st.markdown(f"Status: {'🟢 Active' if st.session_state.webcam_running else '🔴 Inactive'}")
+        with col2:
+            if st.button("Listen to Transcription"):
+                tts = gTTS(st.session_state.transcription_text.strip())
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+                    tts.save(tmp_file.name)
+                    st.audio(tmp_file.name)
