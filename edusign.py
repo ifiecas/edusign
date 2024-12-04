@@ -38,49 +38,47 @@ st.sidebar.markdown(
 )
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
+
 @st.cache_resource
 def load_model():
-    def download_file_from_google_drive(id, destination):
-        # URL to fetch confirmation token
-        URL = "https://drive.google.com/uc?export=download"
-
-        session = requests.Session()
-        response = session.get(URL, params={'id': id}, stream=True)
-        token = get_confirm_token(response)
-
-        if token:
-            params = {'id': id, 'confirm': token}
-            response = session.get(URL, params=params, stream=True)
-
-        save_response_content(response, destination)
-
-    def get_confirm_token(response):
-        for key, value in response.cookies.items():
-            if key.startswith('download_warning'):
-                return value
-        return None
-
-    def save_response_content(response, destination):
-        CHUNK_SIZE = 32768
-
-        with open(destination, "wb") as f:
-            for chunk in response.iter_content(CHUNK_SIZE):
-                if chunk:  # filter out keep-alive new chunks
-                    f.write(chunk)
-
     model_path = "models/sign_language_model.h5"
     os.makedirs("models", exist_ok=True)
 
+    # Google Drive File ID and Download URL
+    file_id = "1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
+    url = f"https://drive.google.com/uc?id={file_id}&export=download"
+
+    # Download the model if it doesn't exist
     if not os.path.exists(model_path):
-        file_id = "1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
-        st.info("Downloading model from Google Drive...")
         try:
-            download_file_from_google_drive(file_id, model_path)
+            st.info("Downloading model from Google Drive...")
+            with requests.Session() as session:
+                response = session.get(url, stream=True)
+                token = None
+                for key, value in response.cookies.items():
+                    if key.startswith("download_warning"):
+                        token = value
+                if token:
+                    params = {"id": file_id, "confirm": token}
+                    response = session.get(url, params=params, stream=True)
+                with open(model_path, "wb") as f:
+                    for chunk in response.iter_content(32768):
+                        if chunk:
+                            f.write(chunk)
             st.success("Model downloaded successfully!")
         except Exception as e:
             st.error(f"Failed to download model: {e}")
             return None, False
 
+    # Validate file size
+    if os.path.exists(model_path):
+        file_size = os.path.getsize(model_path)
+        st.info(f"Downloaded model file size: {file_size} bytes")
+        if file_size < 1000:  # Adjust based on your model size
+            st.error("The downloaded file appears corrupted or incomplete.")
+            return None, False
+
+    # Load the model
     try:
         model = tf.keras.models.load_model(model_path)
         st.success("Model loaded successfully!")
@@ -88,12 +86,6 @@ def load_model():
     except Exception as e:
         st.error(f"Failed to load model: {e}")
         return None, False
-
-gesture_model, model_loaded = load_model()
-
-if not model_loaded:
-    st.error("Model could not be loaded. Please check the logs.")
-
 
 
 # MediaPipe Setup
