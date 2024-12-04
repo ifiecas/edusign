@@ -3,4 +3,5 @@ opencv-python-headless
 mediapipe
 numpy
 tensorflow
+requests
 gtts
