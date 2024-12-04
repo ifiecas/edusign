@@ -38,7 +38,7 @@ page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tu
 @st.cache_resource
 def load_model():
     try:
-        model = tf.keras.models.load_model("/Users/raphael/edusign/sign_language_model_ver5.h5")
+        model = tf.keras.models.load_model("https://huggingface.co/ifiecas/edusign/resolve/main/sign_language_model_ver5.h5")
         return model, True
     except Exception as e:
         st.error(f"Failed to load model: {e}")
