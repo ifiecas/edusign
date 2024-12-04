@@ -37,14 +37,9 @@ st.sidebar.markdown(
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
 
-# Initialize global variables for model and loading status
-gesture_model = None
-model_loaded = False
-
 # Function to load the model
 @st.cache_resource
 def load_model():
-    global gesture_model, model_loaded
     model_path = "models/sign_language_model_ver5.h5"
     os.makedirs("models", exist_ok=True)
 
@@ -52,83 +47,51 @@ def load_model():
     file_id = "1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
     url = f"https://drive.google.com/uc?id={file_id}&export=download"
 
-    try:
-        # Always remove existing model file to ensure fresh download
-        if os.path.exists(model_path):
-            os.remove(model_path)
-            st.info("Removing existing model file for fresh download...")
-
-        # Download the model
+    # Download the model if it doesn't exist
+    if not os.path.exists(model_path):
         st.info("Downloading model from Google Drive...")
-        with requests.Session() as session:
-            # First request to get the download token
-            response = session.get(url)
-            
-            # Check for Google Drive's virus scan warning
-            for key, value in response.cookies.items():
-                if key.startswith("download_warning"):
-                    params = {"id": file_id, "confirm": value}
-                    response = session.get(url, params=params, stream=True)
-                    break
-            else:
-                # If no warning token found, use the initial response
+        try:
+            with requests.Session() as session:
                 response = session.get(url, stream=True)
+                token = None
+                for key, value in response.cookies.items():
+                    if key.startswith("download_warning"):
+                        token = value
+                if token:
+                    params = {"id": file_id, "confirm": token}
+                    response = session.get(url, params=params, stream=True)
+                with open(model_path, "wb") as f:
+                    for chunk in response.iter_content(32768):
+                        if chunk:
+                            f.write(chunk)
+            st.success("Model downloaded successfully!")
+        except Exception as e:
+            st.error(f"Failed to download model: {e}")
+            return None, False
 
-            # Save the model with progress bar
-            file_size = int(response.headers.get('content-length', 0))
-            progress_bar = st.progress(0)
-            block_size = 1024
-            written = 0
+    # Validate file size
+    if os.path.exists(model_path):
+        file_size = os.path.getsize(model_path)
+        if file_size < 1000:
+            st.error("Downloaded file is incomplete. Please check the source file.")
+            return None, False
 
-            with open(model_path, 'wb') as f:
-                for data in response.iter_content(block_size):
-                    written += len(data)
-                    f.write(data)
-                    if file_size:
-                        progress = int((written / file_size) * 100)
-                        progress_bar.progress(min(progress, 100))
-
-        # Verify file size
-        if os.path.exists(model_path):
-            file_size = os.path.getsize(model_path)
-            if file_size < 1000000:  # Model should be at least 1MB
-                st.error("Downloaded file is too small to be a valid model.")
-                if os.path.exists(model_path):
-                    os.remove(model_path)
-                model_loaded = False
-                return None, False
-
-        # Load the model
-        st.info("Loading model into memory...")
-        gesture_model = tf.keras.models.load_model(model_path, compile=False)
-        gesture_model.compile(
-            optimizer='adam',
-            loss='sparse_categorical_crossentropy',
-            metrics=['accuracy']
-        )
-        
-        model_loaded = True
+    # Attempt to load the model
+    try:
+        model = tf.keras.models.load_model(model_path)
         st.success("Model loaded successfully!")
-        return gesture_model, True
-
+        return model, True
     except Exception as e:
-        st.error(f"Error during model operations: {str(e)}")
-        if os.path.exists(model_path):
-            os.remove(model_path)
-        model_loaded = False
+        st.error(f"Failed to load model: {e}")
         return None, False
 
-# Initialize the model at startup
-if gesture_model is None:
-    gesture_model, model_loaded = load_model()
 
-# Add error handling for model dependency
+# Initialize the model immediately after defining `load_model()`
+gesture_model, model_loaded = load_model()
+
 if not model_loaded:
-    st.error("Failed to load the sign language model. Please check your internet connection and try again.")
-    if st.button("Retry Loading Model"):
-        if os.path.exists("models/sign_language_model_ver5.h5"):
-            os.remove("models/sign_language_model_ver5.h5")
-        gesture_model, model_loaded = load_model()
+    st.error("Model could not be loaded. Please check the logs.")
+    st.stop()
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
