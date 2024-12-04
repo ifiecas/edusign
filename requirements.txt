@@ -1,8 +1,7 @@
-streamlit==1.25.0
-opencv-python-headless==4.8.0.74
-mediapipe==0.10.14  # A compatible version with Python 3.11
-numpy==1.24.4
-tensorflow==2.17.1
-requests==2.31.0
-gtts==2.3.2
-protobuf==3.20.3
+streamlit
+tensorflow
+mediapipe
+opencv-python-headless
+gtts
+requests
+numpy
