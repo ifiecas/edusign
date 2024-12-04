@@ -4,3 +4,5 @@ numpy
 opencv-python
 mediapipe
 gtts
+libgl1
+libglib2.0-0
