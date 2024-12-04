@@ -41,12 +41,13 @@ def load_model():
     model_path = "models/sign_language_model_ver5.h5"
     os.makedirs("models", exist_ok=True)
 
+    # Hugging Face URL for the model
+    url = "https://huggingface.co/ifiecas/edusign/resolve/10eaa16f5afea849ba9bc57ef5b159e33752ff8a/sign_language_model_ver5.h5"
+
     # Download the model if it doesn't exist
     if not os.path.exists(model_path):
-        # Direct download URL with confirm parameter
-        url = "https://drive.google.com/uc?id=1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2&confirm=t"
         try:
-            st.info("Downloading model from Google Drive...")
+            st.info("Downloading model from Hugging Face...")
             urllib.request.urlretrieve(url, model_path)
             st.success("Model downloaded successfully!")
         except Exception as e:
