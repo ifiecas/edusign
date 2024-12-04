@@ -5,3 +5,5 @@ numpy==1.24.4
 tensorflow==2.17.1
 requests==2.31.0
 gtts==2.3.2
+protobuf==3.20.3
+
