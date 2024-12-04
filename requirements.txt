@@ -1,6 +1,0 @@
-streamlit
-tensorflow
-mediapipe
-numpy
-opencv-python
-gtts
