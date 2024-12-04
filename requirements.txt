@@ -1,8 +1,8 @@
-streamlit==1.25.0  # Streamlit for your web app
-opencv-python-headless==4.8.0.74  # OpenCV without GUI dependencies (headless for servers)
-mediapipe==0.10.3  # For gesture detection
-numpy==1.24.4  # For numerical operations
-tensorflow==2.17.1  # For machine learning model inference
-requests==2.31.0  # For HTTP requests
-gtts==2.3.2  # For text-to-speech
-protobuf==3.20.3  # Ensure compatibility with TensorFlow and MediaPipe
+streamlit==1.25.0
+opencv-python-headless==4.8.0.74
+mediapipe==0.10.14  # A compatible version with Python 3.11
+numpy==1.24.4
+tensorflow==2.17.1
+requests==2.31.0
+gtts==2.3.2
+protobuf==3.20.3
