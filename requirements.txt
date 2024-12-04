@@ -4,3 +4,5 @@ numpy
 opencv-python-headless
 mediapipe
 gtts
+requests
+streamlit>=1.18.0
