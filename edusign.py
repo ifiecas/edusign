@@ -343,7 +343,9 @@ elif page == "Sign Language to Text":
         </style>
         """, unsafe_allow_html=True)
 
-        st.markdown("### Real-Time Transcription")
+        st.markdown("### Wave Hello to Transcribe")
+
+        st.info("This is a prototype. Please wave **Hello** in front of the webcam to simulate the sign language to text transcription process.")
 
         # Layout for webcam and transcription
         col1, col2 = st.columns([1, 1])
@@ -355,7 +357,7 @@ elif page == "Sign Language to Text":
         with col2:
             st.markdown("### Transcribed Text")
             transcription_placeholder = st.markdown(
-                '<div class="transcription-box">Waiting for transcription...</div>', 
+                '<div class="transcription-box">Waiting for transcription...</div>',
                 unsafe_allow_html=True
             )
 
@@ -369,10 +371,12 @@ elif page == "Sign Language to Text":
                         break
                     frame, gesture, confidence = detect_gesture(frame)
                     frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width="always")
-                    if gesture and confidence > 0.8:
-                        st.session_state.transcription_text += f"{gesture} "
+
+                    # Simulate transcription for "Hello"
+                    if gesture == "Hello" and confidence > 0.8:
+                        st.session_state.transcription_text += "Hello "
                         transcription_placeholder.markdown(
-                            f'<div class="transcription-box">{st.session_state.transcription_text.strip()}</div>', 
+                            f'<div class="transcription-box">{st.session_state.transcription_text.strip()}</div>',
                             unsafe_allow_html=True
                         )
                 cap.release()
@@ -391,13 +395,17 @@ elif page == "Sign Language to Text":
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_file:
                     tmp_file.write(st.session_state.transcription_text.encode())
                     st.download_button("Download", tmp_file.name, "transcription.txt")
-        
+
         with col2:
             if st.button("Listen to Transcription"):
                 tts = gTTS(st.session_state.transcription_text.strip())
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
                     tts.save(tmp_file.name)
-                    st.audio(tmp_file.name)
+                    with open(tmp_file.name, "rb") as audio_file:
+                        st.audio(audio_file.read(), format="audio/mp3")
+
+        
+
 
 elif page == "Connect to a Mentor":
     st.title("🖐️ Connect to a Mentor")
