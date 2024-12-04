@@ -37,61 +37,35 @@ st.sidebar.markdown(
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
 
-# Function to load the model
 @st.cache_resource
 def load_model():
     model_path = "models/sign_language_model_ver5.h5"
     os.makedirs("models", exist_ok=True)
-
+    
     # Google Drive URL
     file_id = "1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
-    url = f"https://drive.google.com/uc?id={file_id}&export=download"
-
-    # Download the model if it doesn't exist
-    if not os.path.exists(model_path):
-        st.info("Downloading model from Google Drive...")
-        try:
-            with requests.Session() as session:
-                response = session.get(url, stream=True)
-                token = None
-                for key, value in response.cookies.items():
-                    if key.startswith("download_warning"):
-                        token = value
-                if token:
-                    params = {"id": file_id, "confirm": token}
-                    response = session.get(url, params=params, stream=True)
-                with open(model_path, "wb") as f:
-                    for chunk in response.iter_content(32768):
-                        if chunk:
-                            f.write(chunk)
-            st.success("Model downloaded successfully!")
-        except Exception as e:
-            st.error(f"Failed to download model: {e}")
-            return None, False
-
-    # Validate file size
-    if os.path.exists(model_path):
-        file_size = os.path.getsize(model_path)
-        if file_size < 1000:
-            st.error("Downloaded file is incomplete. Please check the source file.")
-            return None, False
-
-    # Attempt to load the model
+    download_url = f"https://drive.google.com/uc?id={file_id}"
+    
     try:
-        model = tf.keras.models.load_model(model_path)
-        st.success("Model loaded successfully!")
+        # Download the model if it doesn't exist
+        if not os.path.exists(model_path):
+            st.info("Downloading model from Google Drive...")
+            gdown.download(download_url, model_path, quiet=False)
+            
+        # Verify file exists and has content
+        if not os.path.exists(model_path) or os.path.getsize(model_path) < 1000:
+            st.error("Model file is missing or corrupted")
+            return None, False
+            
+        # Load the model with error handling
+        model = tf.keras.models.load_model(model_path, compile=False)
+        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        
         return model, True
+        
     except Exception as e:
-        st.error(f"Failed to load model: {e}")
+        st.error(f"Error loading model: {str(e)}")
         return None, False
-
-
-# Initialize the model immediately after defining `load_model()`
-gesture_model, model_loaded = load_model()
-
-if not model_loaded:
-    st.error("Model could not be loaded. Please check the logs.")
-    st.stop()
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
