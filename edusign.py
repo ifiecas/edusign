@@ -9,8 +9,6 @@ import urllib.request
 import os
 import requests
 
-
-
 # Page Configuration
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
 
@@ -87,6 +85,14 @@ def load_model():
         st.error(f"Failed to load model: {e}")
         return None, False
 
+# Load the model at the top of the script
+gesture_model, model_loaded = load_model()
+
+# Debugging: Check if the model is loaded
+st.write(f"Model loaded: {model_loaded}")  # Optional debug message
+
+if not model_loaded:
+    st.error("Model could not be loaded. Please check the logs.")
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
@@ -172,6 +178,9 @@ learning_guides = {
         ]
     }
 }
+
+# Add page logic below...
+
 
 def detect_gesture(frame):
     """Detect gestures and return the gesture and confidence."""
