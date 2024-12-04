@@ -48,7 +48,7 @@ def load_model():
     # Check if the model file exists locally
     if not os.path.exists(model_path):
         # Google Drive download URL
-        url = "https://drive.google.com/uc?id=1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
+        url = "https://drive.google.com/uc?id=1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2&confirm=t"
         try:
             st.info("Downloading the model from Google Drive...")
             urllib.request.urlretrieve(url, model_path)
