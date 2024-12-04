@@ -241,7 +241,7 @@ if page == "Home":
     st.markdown(
         """
         <div style="text-align: center; margin-bottom: 40px;">
-            <img src="https://i.postimg.cc/BvT3pcrY/Blue-Gradient-Header-Banner-1.png" 
+            <img src="https://i.postimg.cc/wjSrs4tM/Blue-Gradient-Header-Banner-1.png" 
                  style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
         </div>
         """,
@@ -249,16 +249,97 @@ if page == "Home":
     )
 
     # Welcome message
+
+
     st.markdown(
-        """
-        <div style="text-align: center; font-size: 28px; line-height: 1.8; color: #333; margin-top: 20px;">
-            <h3 style="color: #0f2f76;">Welcome to EduSign!</h3>
-            <p>Empower communication and bridge the gap with sign language.</p>
-            <p>Explore interactive learning, real-time feedback, and much more.</p>
-        </div>
-        """,
-        unsafe_allow_html=True
+       """
+       <div style="text-align: center; background-color: #f8f9fa; padding: 2.5rem 0; border-radius: 10px;">
+           <h2 style="color: #0f2f76; font-size: 1.8rem; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 0 20px;">
+               EduSign AI is an innovative educational platform developed in partnership with 
+               <span style="color: #0f2f76; font-weight: 700;">Victoria University</span> and powered by 
+               <span style="color: #0f2f76; font-weight: 700;">Microsoft Azure AI</span>. 
+           </h2>
+           <p style="color: #2a4494; font-size: 1.2rem; margin: 1rem auto; max-width: 700px; padding: 0 20px;">
+               Our mission is to make sign language learning accessible, interactive, and effective through cutting-edge technology.
+           </p>
+       </div>
+       """,
+       unsafe_allow_html=True
     )
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+       st.markdown(
+           """
+           <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; height: 100%;">
+               <span style="font-size: 2.5rem;">🎯</span>
+               <h4 style="color: #0f2f76; margin: 1rem 0; font-size: 1.4rem;">Smart Learning</h4>
+               <p style="color: #666; line-height: 1.5;">Advanced AI recognition provides real-time feedback on your signing technique</p>
+           </div>
+           """,
+           unsafe_allow_html=True
+       )
+    
+    with col2:
+       st.markdown(
+           """
+           <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; height: 100%;">
+               <span style="font-size: 2.5rem;">📱</span>
+               <h4 style="color: #0f2f76; margin: 1rem 0; font-size: 1.4rem;">Instant Translation</h4>
+               <p style="color: #666; line-height: 1.5;">Microsoft Azure-powered recognition for accurate sign-to-text conversion</p>
+           </div>
+           """,
+           unsafe_allow_html=True
+       )
+    
+    with col3:
+       st.markdown(
+           """
+           <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; height: 100%;">
+               <span style="font-size: 2.5rem;">🤝</span>
+               <h4 style="color: #0f2f76; margin: 1rem 0; font-size: 1.4rem;">Expert Guidance</h4>
+               <p style="color: #666; line-height: 1.5;">Learn from certified mentors and native signers in our community</p>
+           </div>
+           """,
+           unsafe_allow_html=True
+       )
+    
+    st.markdown(
+       """
+       <div style="text-align: center; margin-top: 2rem;">
+           <p style="color: #666; font-size: 1.1rem; line-height: 1.6; margin: 0 auto; max-width: 800px;">
+               Our platform combines Victoria University's expertise in sign language education with 
+               Microsoft's advanced AI technology to create a comprehensive learning experience. 
+               Whether you're a beginner or looking to advance your skills, EduSign AI provides 
+               personalized guidance every step of the way.
+           </p>
+       </div>
+    
+       <footer style="text-align: center; margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 10px;">
+           <div style="max-width: 800px; margin: 0 auto;">
+               <p style="color: #0f2f76; font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem;">
+                   Developed by Ivy Fiecas-Borjal
+               </p>
+               <p style="color: #2a4494; font-size: 1rem; margin-bottom: 1rem;">
+                   For the Victoria University - Accessibility AI Hackathon 2024
+               </p>
+               <a href="https://ifiecas.com/" target="_blank" style="
+                   display: inline-block;
+                   color: white;
+                   background-color: #0f2f76;
+                   padding: 0.5rem 1.5rem;
+                   border-radius: 25px;
+                   text-decoration: none;
+                   font-size: 0.9rem;
+                   transition: background-color 0.3s ease;
+                   ">View Portfolio</a>
+           </div>
+       </footer>
+       """,
+       unsafe_allow_html=True
+    )
+
 
 elif page == "Sign Language Tutor":
     st.title("🖐️ EduSign - Your Sign Language Tutor")
