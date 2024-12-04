@@ -7,7 +7,7 @@ from gtts import gTTS
 import tempfile
 
 # Page Configuration
-st.set_page_config(page_title="EduSign - AI Powered Sign Language Tutor", layout="wide", page_icon="🖐️")
+st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
 
 # Initialize session states
 if 'webcam_running' not in st.session_state:
@@ -22,10 +22,17 @@ if 'user_level' not in st.session_state:
     st.session_state.user_level = "Beginner"  # Initial level
 
 # Sidebar Navigation
-st.sidebar.title("EduSign")
-st.sidebar.markdown("### AI-Powered Sign Language Tutor")
-st.sidebar.markdown("Empowering Communication Through Sign Language Learning")
-page = st.sidebar.radio("Choose a feature", ["Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
+st.sidebar.markdown(
+    """
+    <div style="text-align: center; margin-bottom: 20px;">
+        <img src="https://i.postimg.cc/sgGLzYJV/Learn-Sign-Language.png" 
+             style="width: 80%; height: auto;" alt="Sidebar Image">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
+
 
 # Load Machine Learning Model
 @st.cache_resource
@@ -212,6 +219,57 @@ def evaluate_user_level():
         st.session_state.user_level = "Expert"
 
 # Main pages logic
+
+if page == "Home":
+    # Full-width header image at the top
+    st.markdown(
+        """
+        <div style="text-align: center; margin-bottom: 40px;">
+            <img src="https://i.postimg.cc/BvT3pcrY/Blue-Gradient-Header-Banner-1.png" 
+                 style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Add larger text below the image
+    st.markdown(
+        """
+        <div style="text-align: center; font-size: 28px; line-height: 1.8; color: #333; margin-top: 20px;">
+            <h3 style="color: #0f2f76;">Empower communication and bridge the gap with EduSign AI.</h3>
+            <p>
+                EduSign is an <strong>AI-powered platform</strong> designed to help you learn and practice sign language.<br>
+                Whether you're a beginner starting from scratch or an expert looking to refine your skills, EduSign provides:
+            </p>
+            <ul style="list-style-type: none; padding: 0; font-size: 24px; text-align: left; max-width: 800px; margin: 0 auto;">
+                <li>✔ Real-time gesture recognition</li>
+                <li>✔ Interactive tutorials with feedback</li>
+                <li>✔ Sign language transcription to text</li>
+                <li>✔ Personalized mentorship options</li>
+            </ul>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+    # Add footer at the bottom
+    st.markdown(
+        """
+        <hr style="margin-top: 50px; margin-bottom: 20px; border: none; border-top: 2px solid #ccc;">
+        <div style="text-align: center; font-size: 16px; color: #777; line-height: 1.2;">
+            <p style="margin: 0;">Developed by <strong>Ivy Fiecas-Borjal</strong></p>
+            <p style="margin: 0;">Victoria University's Accessibility AI Hackathon 2024</p>
+            <p style="margin: 0;">Portfolio: <a href="https://ifiecas.com/" style="color: #0f2f76; text-decoration: none;">ifiecas.com/</a></p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+
+
+
 if page == "Sign Language Tutor":
     st.title("🖐️ EduSign - AI Powered Sign Language Tutor")
     if not model_loaded:
@@ -344,17 +402,37 @@ elif page == "Sign Language to Text":
 elif page == "Connect to a Mentor":
     st.title("🖐️ Connect to a Mentor")
 
-    st.markdown(f"### Your Skill Level: **{st.session_state.user_level}**")
-    st.markdown("Our mentors are here to guide you at your pace. Based on your level, we recommend:")
+    st.markdown(
+        f"""
+        ### Based on Your Learning Level: **{st.session_state.user_level}**
+        Our AI-powered online tutor has analyzed your progress and recommends mentors best suited to help you advance.
+        Select your preferred mentor from the list below to schedule a session:
+        """
+    )
 
+    # List of mentors categorized by levels
     mentors = {
-        "Beginner": "Alex - Specializes in foundational signs and building confidence.",
-        "Intermediate": "Jordan - Helps with fluency and transitioning to conversational signing.",
-        "Expert": "Taylor - Expert in advanced and specialized signing techniques."
+        "Beginner": {
+            "Alex": "Specializes in foundational signs and building confidence."
+        },
+        "Intermediate": {
+            "Jordan": "Helps with fluency and transitioning to conversational signing."
+        },
+        "Expert": {
+            "Taylor": "Expert in advanced and specialized signing techniques."
+        }
     }
 
-    mentor = mentors.get(st.session_state.user_level, "Alex")
-    st.markdown(f"#### Recommended Mentor: **{mentor}**")
-    st.markdown("Click below to schedule a session:")
+    # Display mentors based on the user's level
+    st.markdown("### Recommended Mentors:")
+    for mentor, description in mentors[st.session_state.user_level].items():
+        st.markdown(f"**{mentor}**: {description}")
+
+    # Allow users to select any mentor (even outside their level)
+    st.markdown("### Select a Mentor to Schedule a Session:")
+    all_mentors = {k: v for level in mentors.values() for k, v in level.items()}
+    selected_mentor = st.selectbox("Choose a mentor:", list(all_mentors.keys()))
+
+    # Confirmation button
     if st.button("Schedule Session"):
-        st.success("Mentor session scheduled successfully!")
+        st.success(f"Session successfully scheduled with **{selected_mentor}**!")
