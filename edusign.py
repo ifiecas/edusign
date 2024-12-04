@@ -28,7 +28,7 @@ if 'user_level' not in st.session_state:
 st.sidebar.markdown(
     """
     <div style="text-align: center; margin-bottom: 20px;">
-        <img src="images/logo.png" 
+        <img src="https://i.postimg.cc/sgGLzYJV/Learn-Sign-Language.png" 
              style="width: 80%; height: auto;" alt="Sidebar Image">
     </div>
     """,
@@ -38,7 +38,7 @@ page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tu
 
 @st.cache_resource
 def load_model():
-    model_path = "models/sign_language_model.h5"
+    model_path = "models/sign_language_model_ver5.h5"
     os.makedirs("models", exist_ok=True)
 
     # Download the model if it doesn't exist
@@ -247,7 +247,7 @@ if page == "Home":
     st.markdown(
         """
         <div style="text-align: center; margin-bottom: 40px;">
-            <img src="images/banner.png" 
+            <img src="https://i.postimg.cc/BvT3pcrY/Blue-Gradient-Header-Banner-1.png" 
                  style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
         </div>
         """,
