@@ -37,6 +37,7 @@ st.sidebar.markdown(
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
 
+# Function to load the model
 @st.cache_resource
 def load_model():
     model_path = "models/sign_language_model_ver5.h5"
@@ -71,10 +72,9 @@ def load_model():
     # Validate file size
     if os.path.exists(model_path):
         file_size = os.path.getsize(model_path)
-        if file_size < 1000:  # Adjust this threshold based on your model size
+        if file_size < 1000:
             st.error("Downloaded file is incomplete. Please check the source file.")
             return None, False
-        st.info(f"Model file size: {file_size} bytes")
 
     # Attempt to load the model
     try:
@@ -84,6 +84,14 @@ def load_model():
     except Exception as e:
         st.error(f"Failed to load model: {e}")
         return None, False
+
+
+# Initialize the model immediately after defining `load_model()`
+gesture_model, model_loaded = load_model()
+
+if not model_loaded:
+    st.error("Model could not be loaded. Please check the logs.")
+    st.stop()
 
 
 # MediaPipe Setup
@@ -314,11 +322,11 @@ if page == "Home":
 
 if page == "Sign Language Tutor":
     st.title("🖐️ Meet EduSign - Your AI-Powered Sign Language Tutor")
-
+    
+    # Check if the model is loaded
     if not model_loaded:
         st.error("Model not loaded. Please check the model file and restart.")
         st.stop()
-
 
     # Select a gesture to learn
     selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
@@ -374,7 +382,6 @@ if page == "Sign Language Tutor":
         # Display camera status and user level
         st.markdown(f"Status: {'🟢 Active' if st.session_state.webcam_running else '🔴 Inactive'}")
         st.markdown(f"Skill Level: **{st.session_state.user_level}**")
-
 
 
 
