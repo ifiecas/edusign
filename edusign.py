@@ -25,7 +25,7 @@ if 'user_level' not in st.session_state:
 st.sidebar.markdown(
     """
     <div style="text-align: center; margin-bottom: 20px;">
-        <img src="https://i.postimg.cc/sgGLzYJV/Learn-Sign-Language.png" 
+        <img src="images/logo.png" 
              style="width: 80%; height: auto;" alt="Sidebar Image">
     </div>
     """,
@@ -225,7 +225,7 @@ if page == "Home":
     st.markdown(
         """
         <div style="text-align: center; margin-bottom: 40px;">
-            <img src="https://i.postimg.cc/BvT3pcrY/Blue-Gradient-Header-Banner-1.png" 
+            <img src="images/banner.png" 
                  style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
         </div>
         """,
