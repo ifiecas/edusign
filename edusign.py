@@ -3,6 +3,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import tensorflow as tf
+import requests
 from gtts import gTTS
 import tempfile
 
@@ -33,23 +34,19 @@ st.sidebar.markdown(
 )
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
-
+# Load Machine Learning Model
 @st.cache_resource
 def load_model():
-    import requests
-    import tempfile
-    import tensorflow as tf
-
-    # URL to your model file with SAS token
-    model_url = "https://<account_name>.blob.core.windows.net/<container_name>/sign_language_model_ver5.h5?<sas_token>"
-
+    """Download and load the model from Azure Blob Storage."""
+    model_url = "https://edusignstorage.blob.core.windows.net/model/sign_language_model_ver5.h5"
+    
     try:
-        # Stream the file directly into memory using a temporary file
+        # Download the model to a temporary file
         with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as temp_file:
             response = requests.get(model_url, stream=True)
-            response.raise_for_status()  # Check for request errors
+            response.raise_for_status()
             
-            # Write content to temporary file
+            # Write content to the temp file
             for chunk in response.iter_content(chunk_size=8192):
                 temp_file.write(chunk)
             
@@ -63,12 +60,8 @@ def load_model():
         st.error(f"Failed to load model: {e}")
         return None, False
 
-    finally:
-        # Clean up the temporary file
-        import os
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-
+# Load the model
+gesture_model, model_loaded = load_model()
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
@@ -242,7 +235,6 @@ def evaluate_user_level():
     else:
         st.session_state.user_level = "Expert"
 
-# Main pages logic
 
 if page == "Home":
     # Full-width header image at the top
@@ -255,54 +247,28 @@ if page == "Home":
         """,
         unsafe_allow_html=True
     )
-    
-    # Add larger text below the image
+
+    # Welcome message
     st.markdown(
         """
         <div style="text-align: center; font-size: 28px; line-height: 1.8; color: #333; margin-top: 20px;">
-            <h3 style="color: #0f2f76;">Empower communication and bridge the gap with EduSign AI.</h3>
-            <p>
-                EduSign is an <strong>AI-powered platform</strong> designed to help you learn and practice sign language.<br>
-                Whether you're a beginner starting from scratch or an expert looking to refine your skills, EduSign provides:
-            </p>
-            <ul style="list-style-type: none; padding: 0; font-size: 24px; text-align: left; max-width: 800px; margin: 0 auto;">
-                <li>✔ Real-time gesture recognition</li>
-                <li>✔ Interactive tutorials with feedback</li>
-                <li>✔ Sign language transcription to text</li>
-                <li>✔ Personalized mentorship options</li>
-            </ul>
+            <h3 style="color: #0f2f76;">Welcome to EduSign!</h3>
+            <p>Empower communication and bridge the gap with sign language.</p>
+            <p>Explore interactive learning, real-time feedback, and much more.</p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
+elif page == "Sign Language Tutor":
+    st.title("🖐️ EduSign - Your Sign Language Tutor")
 
-    # Add footer at the bottom
-    st.markdown(
-        """
-        <hr style="margin-top: 50px; margin-bottom: 20px; border: none; border-top: 2px solid #ccc;">
-        <div style="text-align: center; font-size: 16px; color: #777; line-height: 1.2;">
-            <p style="margin: 0;">Developed by <strong>Ivy Fiecas-Borjal</strong></p>
-            <p style="margin: 0;">Victoria University's Accessibility AI Hackathon 2024</p>
-            <p style="margin: 0;">Portfolio: <a href="https://ifiecas.com/" style="color: #0f2f76; text-decoration: none;">ifiecas.com/</a></p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
-
-
-
-if page == "Sign Language Tutor":
-    st.title("🖐️ Meet EduSign - Your AI-Powered Sign Language Tutor")
     if not model_loaded:
-        st.error("Model not loaded. Please check the model file and restart.")
+        st.error("Model failed to load. Please check the URL and restart the application.")
     else:
         selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
-        
-        col1, col2 = st.columns(2)
 
+        col1, col2 = st.columns(2)
 
         with col1:
             st.markdown("### Tutorial Video")
@@ -317,45 +283,37 @@ if page == "Sign Language Tutor":
                 </div>
             """, unsafe_allow_html=True)
 
-
-            st.markdown("### EduSign Learning Guide")
+            st.markdown("### Learning Guide")
             guide = learning_guides.get(selected_gesture, {})
-            
             st.markdown("#### Steps:")
             for step in guide.get("steps", []):
-                st.markdown(f"• {step}")
-            
+                st.markdown(f"- {step}")
             st.markdown("#### Pro Tips:")
             for tip in guide.get("tips", []):
-                st.markdown(f"• {tip}")
-            
+                st.markdown(f"- {tip}")
             st.markdown("#### Common Mistakes:")
             for mistake in guide.get("mistakes", []):
-                st.markdown(f"• {mistake}")
-        
+                st.markdown(f"- {mistake}")
+
         with col2:
             st.markdown("### Practice Area")
             frame_placeholder = st.empty()
             feedback_placeholder = st.empty()
-            
-            # Checkbox for controlling the camera
+
             st.session_state.webcam_running = st.checkbox("Start/Stop Camera", value=st.session_state.webcam_running)
-            
-            # Start webcam feed if the checkbox is checked
+
             if st.session_state.webcam_running:
                 start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture)
             else:
                 st.markdown("Camera is stopped.")
-        
-            # Display camera status
             st.markdown(f"Status: {'🟢 Active' if st.session_state.webcam_running else '🔴 Inactive'}")
             st.markdown(f"Skill Level: **{st.session_state.user_level}**")
 
 elif page == "Sign Language to Text":
-    st.title("🖐️ Gesture Translator | Converting sign language to text and speech, helping deaf students participate in class")
+    st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
 
     if not model_loaded:
-        st.error("Model not loaded. Please check the model file and restart.")
+        st.error("Model failed to load. Please check the URL and restart the application.")
     else:
         st.markdown("""
         <style>
@@ -372,9 +330,8 @@ elif page == "Sign Language to Text":
         </style>
         """, unsafe_allow_html=True)
 
-        st.info("This is a prototype. Please wave **Hello** or sign **Thank You** in front of the webcam to simulate the sign language to text transcription process.")
+        st.info("Start waving 'Hello' or signing 'Thank You' to see real-time transcription.")
 
-        # Layout for webcam and transcription
         col1, col2 = st.columns([1, 1])
 
         with col1:
@@ -388,10 +345,8 @@ elif page == "Sign Language to Text":
                 unsafe_allow_html=True
             )
 
-        # Checkbox for controlling the transcription feed
         st.session_state.transcription_running = st.checkbox("Start/Stop Transcription", value=st.session_state.transcription_running)
 
-        # Handle webcam feed
         if st.session_state.transcription_running:
             cap = cv2.VideoCapture(0)
             if cap.isOpened():
@@ -402,20 +357,16 @@ elif page == "Sign Language to Text":
                     frame, gesture, confidence = detect_gesture(frame)
                     frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width="always")
 
-
-                    # Simulate transcription for "Hello" and "Thank You"
                     if gesture in ["Hello", "Thank You"] and confidence > 0.3:
                         st.session_state.transcription_text += f"{gesture} "
                         transcription_placeholder.markdown(
                             f'<div class="transcription-box">{st.session_state.transcription_text.strip()}</div>',
                             unsafe_allow_html=True
                         )
-                
                 cap.release()
         else:
             st.markdown("Transcription is stopped.")
 
-        # Options for download and listen
         st.markdown("### Options")
         col1, col2 = st.columns([1, 1])
 
@@ -433,20 +384,16 @@ elif page == "Sign Language to Text":
                     with open(tmp_file.name, "rb") as audio_file:
                         st.audio(audio_file.read(), format="audio/mp3")
 
-
-
 elif page == "Connect to a Mentor":
-    st.title("🖐️ Connect to a Mentor | Blending AI insights with human connection")
+    st.title("🖐️ Connect to a Mentor")
 
     st.markdown(
         f"""
         ### Based on Your Learning Level: **{st.session_state.user_level}**
-        Our AI-powered online tutor has analyzed your progress and recommends mentors best suited to help you advance.
-        Select your preferred mentor from the list below to schedule a session:
+        Our AI-powered analysis recommends the best mentors to help you advance.
         """
     )
 
-    # List of mentors categorized by levels
     mentors = {
         "Beginner": {
             "Alex": "Specializes in foundational signs and building confidence."
@@ -459,16 +406,13 @@ elif page == "Connect to a Mentor":
         }
     }
 
-    # Display mentors based on the user's level
     st.markdown("### Recommended Mentors:")
-    for mentor, description in mentors[st.session_state.user_level].items():
-        st.markdown(f"**{mentor}**: {description}")
+    for mentor, description in mentors.get(st.session_state.user_level, {}).items():
+        st.markdown(f"- **{mentor}**: {description}")
 
-    # Allow users to select any mentor (even outside their level)
     st.markdown("### Select a Mentor to Schedule a Session:")
     all_mentors = {k: v for level in mentors.values() for k, v in level.items()}
     selected_mentor = st.selectbox("Choose a mentor:", list(all_mentors.keys()))
 
-    # Confirmation button
     if st.button("Schedule Session"):
         st.success(f"Session successfully scheduled with **{selected_mentor}**!")
