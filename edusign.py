@@ -42,16 +42,14 @@ def load_model():
     model_path = "models/sign_language_model.h5"
     os.makedirs("models", exist_ok=True)
 
-    # Debugging messages
-    st.write("Attempting to load model...")
+    # Google Drive URL
+    file_id = "1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
+    url = f"https://drive.google.com/uc?id={file_id}&export=download"
 
-    # Check if model file exists
+    # Download the model if it doesn't exist
     if not os.path.exists(model_path):
-        st.info("Model not found locally. Downloading from Google Drive...")
         try:
-            file_id = "1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
-            url = f"https://drive.google.com/uc?id={file_id}&export=download"
-
+            st.info("Downloading model from Google Drive...")
             with requests.Session() as session:
                 response = session.get(url, stream=True)
                 token = None
@@ -71,15 +69,14 @@ def load_model():
             return None, False
 
     # Validate file size
-    st.info(f"Model path: {model_path}")
     if os.path.exists(model_path):
         file_size = os.path.getsize(model_path)
-        st.write(f"Model file size: {file_size} bytes")
-        if file_size < 1000:
-            st.error("Downloaded model file is too small. It might be corrupted.")
+        st.info(f"Downloaded model file size: {file_size} bytes")
+        if file_size < 1000:  # Adjust based on your model size
+            st.error("Downloaded file is incomplete.")
             return None, False
 
-    # Attempt to load the model
+    # Load the model
     try:
         model = tf.keras.models.load_model(model_path)
         st.success("Model loaded successfully!")
@@ -88,12 +85,14 @@ def load_model():
         st.error(f"Failed to load model: {e}")
         return None, False
 
+# Load the model at the top of the script
 gesture_model, model_loaded = load_model()
+
+# Debugging: Check if the model is loaded
+st.write(f"Model loaded: {model_loaded}")  # Optional debug message
 
 if not model_loaded:
     st.error("Model could not be loaded. Please check the logs.")
-    st.stop()
-
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
@@ -181,6 +180,7 @@ learning_guides = {
 }
 
 # Add page logic below...
+
 
 
 def detect_gesture(frame):
