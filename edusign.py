@@ -312,13 +312,16 @@ if page == "Sign Language Tutor":
             frame_placeholder = st.empty()
             feedback_placeholder = st.empty()
             
+            # Checkbox for controlling the camera
+            st.session_state.webcam_running = st.checkbox("Start/Stop Camera", value=st.session_state.webcam_running)
+            
+            # Start webcam feed if the checkbox is checked
             if st.session_state.webcam_running:
                 start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture)
-            
-            if st.button("Toggle Webcam"):
-                st.session_state.webcam_running = not st.session_state.webcam_running
-                st.session_state.usage_count += 1  # Increment usage count
-                evaluate_user_level()  # Update user level
+            else:
+                st.markdown("Camera is stopped.")
+        
+            # Display camera status
             st.markdown(f"Status: {'🟢 Active' if st.session_state.webcam_running else '🔴 Inactive'}")
             st.markdown(f"Skill Level: **{st.session_state.user_level}**")
 
@@ -345,7 +348,7 @@ elif page == "Sign Language to Text":
 
         st.markdown("### Wave Hello to Transcribe")
 
-        st.info("This is a prototype. Please wave **Hello** in front of the webcam to simulate the sign language to text transcription process.")
+        st.info("This is a prototype. Please wave **Hello** or sign **Thank You** in front of the webcam to simulate the sign language to text transcription process.")
 
         # Layout for webcam and transcription
         col1, col2 = st.columns([1, 1])
@@ -361,7 +364,10 @@ elif page == "Sign Language to Text":
                 unsafe_allow_html=True
             )
 
-        # Toggle transcription feed
+        # Checkbox for controlling the transcription feed
+        st.session_state.transcription_running = st.checkbox("Start/Stop Transcription", value=st.session_state.transcription_running)
+
+        # Handle webcam feed
         if st.session_state.transcription_running:
             cap = cv2.VideoCapture(0)
             if cap.isOpened():
@@ -372,19 +378,18 @@ elif page == "Sign Language to Text":
                     frame, gesture, confidence = detect_gesture(frame)
                     frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width="always")
 
-                    # Simulate transcription for "Hello"
-                    if gesture == "Hello" and confidence > 0.8:
-                        st.session_state.transcription_text += "Hello "
+
+                    # Simulate transcription for "Hello" and "Thank You"
+                    if gesture in ["Hello", "Thank You"] and confidence > 0.3:
+                        st.session_state.transcription_text += f"{gesture} "
                         transcription_placeholder.markdown(
                             f'<div class="transcription-box">{st.session_state.transcription_text.strip()}</div>',
                             unsafe_allow_html=True
                         )
+                
                 cap.release()
-
-        if st.button("Toggle Transcription"):
-            st.session_state.transcription_running = not st.session_state.transcription_running
-            st.session_state.usage_count += 1
-            evaluate_user_level()
+        else:
+            st.markdown("Transcription is stopped.")
 
         # Options for download and listen
         st.markdown("### Options")
@@ -404,7 +409,6 @@ elif page == "Sign Language to Text":
                     with open(tmp_file.name, "rb") as audio_file:
                         st.audio(audio_file.read(), format="audio/mp3")
 
-        
 
 
 elif page == "Connect to a Mentor":
