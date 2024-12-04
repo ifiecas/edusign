@@ -5,6 +5,9 @@ import numpy as np
 import tensorflow as tf
 from gtts import gTTS
 import tempfile
+import urllib.request
+import os
+
 
 # Page Configuration
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
@@ -37,13 +40,33 @@ page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tu
 # Load Machine Learning Model
 @st.cache_resource
 def load_model():
+    model_path = "models/sign_language_model.h5"
+    
+    # Create a 'models' folder if it doesn't exist
+    os.makedirs("models", exist_ok=True)
+
+    # Check if the model file exists locally
+    if not os.path.exists(model_path):
+        # Google Drive download URL
+        url = "https://drive.google.com/uc?id=1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
+        try:
+            st.info("Downloading the model from Google Drive...")
+            urllib.request.urlretrieve(url, model_path)
+            st.success("Model downloaded successfully!")
+        except Exception as e:
+            st.error(f"Failed to download the model: {e}")
+            return None, False
+
+    # Load the model
     try:
-        model = tf.keras.models.load_model("/Users/raphael/signlanguage_tutor/sign_language_model_ver5.h5")
+        model = tf.keras.models.load_model(model_path)
+        st.success("Model loaded successfully!")
         return model, True
     except Exception as e:
         st.error(f"Failed to load model: {e}")
         return None, False
 
+# Load the gesture model
 gesture_model, model_loaded = load_model()
 
 # MediaPipe Setup
