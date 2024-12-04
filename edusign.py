@@ -7,6 +7,8 @@ from gtts import gTTS
 import tempfile
 import urllib.request
 import os
+import requests
+
 
 
 # Page Configuration
@@ -38,23 +40,47 @@ page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tu
 
 @st.cache_resource
 def load_model():
-    model_path = "models/sign_language_model_ver5.h5"
+    def download_file_from_google_drive(id, destination):
+        # URL to fetch confirmation token
+        URL = "https://drive.google.com/uc?export=download"
+
+        session = requests.Session()
+        response = session.get(URL, params={'id': id}, stream=True)
+        token = get_confirm_token(response)
+
+        if token:
+            params = {'id': id, 'confirm': token}
+            response = session.get(URL, params=params, stream=True)
+
+        save_response_content(response, destination)
+
+    def get_confirm_token(response):
+        for key, value in response.cookies.items():
+            if key.startswith('download_warning'):
+                return value
+        return None
+
+    def save_response_content(response, destination):
+        CHUNK_SIZE = 32768
+
+        with open(destination, "wb") as f:
+            for chunk in response.iter_content(CHUNK_SIZE):
+                if chunk:  # filter out keep-alive new chunks
+                    f.write(chunk)
+
+    model_path = "models/sign_language_model.h5"
     os.makedirs("models", exist_ok=True)
 
-    # Hugging Face URL for the model
-    url = "https://huggingface.co/ifiecas/edusign/resolve/10eaa16f5afea849ba9bc57ef5b159e33752ff8a/sign_language_model_ver5.h5"
-
-    # Download the model if it doesn't exist
     if not os.path.exists(model_path):
+        file_id = "1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
+        st.info("Downloading model from Google Drive...")
         try:
-            st.info("Downloading model from Hugging Face...")
-            urllib.request.urlretrieve(url, model_path)
+            download_file_from_google_drive(file_id, model_path)
             st.success("Model downloaded successfully!")
         except Exception as e:
             st.error(f"Failed to download model: {e}")
             return None, False
 
-    # Load the model
     try:
         model = tf.keras.models.load_model(model_path)
         st.success("Model loaded successfully!")
@@ -67,6 +93,7 @@ gesture_model, model_loaded = load_model()
 
 if not model_loaded:
     st.error("Model could not be loaded. Please check the logs.")
+
 
 
 # MediaPipe Setup
