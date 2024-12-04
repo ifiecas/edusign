@@ -205,7 +205,7 @@ def start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture)
                     with col2:
                         st.metric("Confidence", f"{confidence*100:.1f}%" if confidence else "N/A")
                     
-                    st.markdown(f"### Feedback:\n{feedback}")
+                    st.markdown(f"### EduSign AI's Feedback:\n{feedback}")
     finally:
         cap.release()
 
@@ -271,7 +271,7 @@ if page == "Home":
 
 
 if page == "Sign Language Tutor":
-    st.title("🖐️ EduSign - AI Powered Sign Language Tutor")
+    st.title("🖐️ Meet EduSign - Your AI-Powered Sign Language Tutor")
     if not model_loaded:
         st.error("Model not loaded. Please check the model file and restart.")
     else:
@@ -292,7 +292,7 @@ if page == "Sign Language Tutor":
                 </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("### Learning Guide")
+            st.markdown("### EduSign Learning Guide")
             guide = learning_guides.get(selected_gesture, {})
             
             st.markdown("#### Steps:")
@@ -326,7 +326,7 @@ if page == "Sign Language Tutor":
             st.markdown(f"Skill Level: **{st.session_state.user_level}**")
 
 elif page == "Sign Language to Text":
-    st.title("🖐️ Sign Language to Text")
+    st.title("🖐️ Gesture Translator | Converting sign language to text and speech, helping deaf students participate in class")
 
     if not model_loaded:
         st.error("Model not loaded. Please check the model file and restart.")
@@ -345,8 +345,6 @@ elif page == "Sign Language to Text":
             }
         </style>
         """, unsafe_allow_html=True)
-
-        st.markdown("### Wave Hello to Transcribe")
 
         st.info("This is a prototype. Please wave **Hello** or sign **Thank You** in front of the webcam to simulate the sign language to text transcription process.")
 
@@ -412,7 +410,7 @@ elif page == "Sign Language to Text":
 
 
 elif page == "Connect to a Mentor":
-    st.title("🖐️ Connect to a Mentor")
+    st.title("🖐️ Connect to a Mentor | Blending AI insights with human connection")
 
     st.markdown(
         f"""
