@@ -309,6 +309,8 @@ elif page == "Sign Language Tutor":
             st.markdown(f"Status: {'🟢 Active' if st.session_state.webcam_running else '🔴 Inactive'}")
             st.markdown(f"Skill Level: **{st.session_state.user_level}**")
 
+
+
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
 
@@ -355,7 +357,7 @@ elif page == "Sign Language to Text":
                     if not ret:
                         break
                     frame, gesture, confidence = detect_gesture(frame)
-                    frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_column_width="always")
+                    frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), use_container_width=True)
 
                     if gesture in ["Hello", "Thank You"] and confidence > 0.3:
                         st.session_state.transcription_text += f"{gesture} "
@@ -383,6 +385,9 @@ elif page == "Sign Language to Text":
                     tts.save(tmp_file.name)
                     with open(tmp_file.name, "rb") as audio_file:
                         st.audio(audio_file.read(), format="audio/mp3")
+
+
+
 
 elif page == "Connect to a Mentor":
     st.title("🖐️ Connect to a Mentor")
