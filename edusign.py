@@ -5,7 +5,6 @@ import numpy as np
 import tensorflow as tf
 from gtts import gTTS
 import tempfile
-import urllib.request
 import os
 import requests
 
@@ -36,7 +35,6 @@ st.sidebar.markdown(
 )
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
-
 @st.cache_resource
 def load_model():
     model_path = "models/sign_language_model_ver5.h5"
@@ -50,7 +48,11 @@ def load_model():
         # Download the model if it doesn't exist
         if not os.path.exists(model_path):
             st.info("Downloading model from Google Drive...")
-            gdown.download(download_url, model_path, quiet=False)
+            with requests.get(download_url, stream=True) as response:
+                with open(model_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
             
         # Verify file exists and has content
         if not os.path.exists(model_path) or os.path.getsize(model_path) < 1000:
@@ -66,6 +68,12 @@ def load_model():
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
         return None, False
+
+# Load the model at the start of the script
+gesture_model, model_loaded = load_model()
+if not model_loaded:
+    st.error("Model could not be loaded. Please check the logs.")
+    st.stop()
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
@@ -152,97 +160,6 @@ learning_guides = {
     }
 }
 
-# Add page logic below...
-
-
-
-def detect_gesture(frame):
-    """Detect gestures and return the gesture and confidence."""
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = hands.process(frame_rgb)
-    prediction = None
-    confidence = None
-
-    if results.multi_hand_landmarks:
-        for hand_landmarks in results.multi_hand_landmarks:
-            mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-            
-            h, w, _ = frame.shape
-            x_coords = [lm.x * w for lm in hand_landmarks.landmark]
-            y_coords = [lm.y * h for lm in hand_landmarks.landmark]
-            
-            x_min, x_max = map(int, [min(x_coords), max(x_coords)])
-            y_min, y_max = map(int, [min(y_coords), max(y_coords)])
-            
-            padding = 20
-            x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
-            y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
-            
-            if x_min < x_max and y_min < y_max:
-                hand_img = frame_rgb[y_min:y_max, x_min:x_max]
-                hand_img = cv2.resize(hand_img, (224, 224))
-                hand_img = hand_img / 255.0
-                
-                pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                prediction = gesture_classes.get(np.argmax(pred))
-                confidence = float(np.max(pred))
-    
-    return frame, prediction, confidence
-
-def process_frame(frame, selected_gesture):
-    """Process the webcam frame to detect and classify gestures with feedback."""
-    frame, prediction, confidence = detect_gesture(frame)
-    feedback = None
-
-    if prediction is None:
-        feedback = "No hand detected. Make sure your hand is visible to the camera."
-    elif prediction != selected_gesture:
-        feedback = f"Try again! Remember, for '{selected_gesture}':\n" + "\n".join(
-            [f"- {step}" for step in learning_guides[selected_gesture]["steps"]]
-        )
-    else:
-        feedback = f"Great job! You've successfully signed '{selected_gesture}'."
-
-    return frame, prediction, confidence, feedback
-
-def start_webcam_feed(frame_placeholder, feedback_placeholder, selected_gesture):
-    """Start the webcam feed for practicing gestures."""
-    cap = cv2.VideoCapture(0)
-    
-    if not cap.isOpened():
-        st.error("Cannot access webcam. Please check your camera connection.")
-        return
-
-    try:
-        while st.session_state.webcam_running:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            frame, gesture, confidence, feedback = process_frame(frame, selected_gesture)
-            frame_placeholder.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            
-            if feedback_placeholder:
-                with feedback_placeholder.container():
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Detected Gesture", gesture if gesture else "None")
-                    with col2:
-                        st.metric("Confidence", f"{confidence*100:.1f}%" if confidence else "N/A")
-                    
-                    st.markdown(f"### EduSign AI's Feedback:\n{feedback}")
-    finally:
-        cap.release()
-
-def evaluate_user_level():
-    """Evaluate the user's skill level based on usage."""
-    if st.session_state.usage_count < 10:
-        st.session_state.user_level = "Beginner"
-    elif st.session_state.usage_count < 30:
-        st.session_state.user_level = "Intermediate"
-    else:
-        st.session_state.user_level = "Expert"
-
 # Main pages logic
 
 if page == "Home":
@@ -290,7 +207,6 @@ if page == "Home":
     """,
     unsafe_allow_html=True
 )
-
 
 
 if page == "Sign Language Tutor":
@@ -357,15 +273,12 @@ if page == "Sign Language Tutor":
         st.markdown(f"Skill Level: **{st.session_state.user_level}**")
 
 
-
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting sign language to text and speech, helping deaf students participate in class")
 
     if not model_loaded:
         st.error("Model not loaded. Please check the model file and restart.")
         st.stop()
-
-
 
     # CSS styling for the transcription box
     st.markdown("""
@@ -455,8 +368,6 @@ elif page == "Sign Language to Text":
                         st.audio(audio_file.read(), format="audio/mp3")
             else:
                 st.warning("No transcription available to play.")
-
-
 
 
 elif page == "Connect to a Mentor":
