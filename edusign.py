@@ -39,7 +39,7 @@ page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tu
 
 @st.cache_resource
 def load_model():
-    model_path = "models/sign_language_model.h5"
+    model_path = "models/sign_language_model_ver5.h5"
     os.makedirs("models", exist_ok=True)
 
     # Google Drive URL
@@ -48,8 +48,8 @@ def load_model():
 
     # Download the model if it doesn't exist
     if not os.path.exists(model_path):
+        st.info("Downloading model from Google Drive...")
         try:
-            st.info("Downloading model from Google Drive...")
             with requests.Session() as session:
                 response = session.get(url, stream=True)
                 token = None
@@ -71,12 +71,12 @@ def load_model():
     # Validate file size
     if os.path.exists(model_path):
         file_size = os.path.getsize(model_path)
-        st.info(f"Downloaded model file size: {file_size} bytes")
-        if file_size < 1000:  # Adjust based on your model size
-            st.error("Downloaded file is incomplete.")
+        if file_size < 1000:  # Adjust this threshold based on your model size
+            st.error("Downloaded file is incomplete. Please check the source file.")
             return None, False
+        st.info(f"Model file size: {file_size} bytes")
 
-    # Load the model
+    # Attempt to load the model
     try:
         model = tf.keras.models.load_model(model_path)
         st.success("Model loaded successfully!")
@@ -85,14 +85,6 @@ def load_model():
         st.error(f"Failed to load model: {e}")
         return None, False
 
-# Load the model at the top of the script
-gesture_model, model_loaded = load_model()
-
-# Debugging: Check if the model is loaded
-st.write(f"Model loaded: {model_loaded}")  # Optional debug message
-
-if not model_loaded:
-    st.error("Model could not be loaded. Please check the logs.")
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
