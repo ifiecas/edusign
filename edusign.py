@@ -34,17 +34,41 @@ st.sidebar.markdown(
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
 
-# Load Machine Learning Model
 @st.cache_resource
 def load_model():
+    import requests
+    import tempfile
+    import tensorflow as tf
+
+    # URL to your model file with SAS token
+    model_url = "https://<account_name>.blob.core.windows.net/<container_name>/sign_language_model_ver5.h5?<sas_token>"
+
     try:
-        model = tf.keras.models.load_model("https://huggingface.co/ifiecas/edusign/resolve/main/sign_language_model_ver5.h5")
+        # Stream the file directly into memory using a temporary file
+        with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as temp_file:
+            response = requests.get(model_url, stream=True)
+            response.raise_for_status()  # Check for request errors
+            
+            # Write content to temporary file
+            for chunk in response.iter_content(chunk_size=8192):
+                temp_file.write(chunk)
+            
+            temp_file_path = temp_file.name
+
+        # Load the model from the temporary file
+        model = tf.keras.models.load_model(temp_file_path)
         return model, True
+
     except Exception as e:
         st.error(f"Failed to load model: {e}")
         return None, False
 
-gesture_model, model_loaded = load_model()
+    finally:
+        # Clean up the temporary file
+        import os
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
