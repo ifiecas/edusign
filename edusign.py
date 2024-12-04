@@ -278,19 +278,21 @@ if page == "Sign Language Tutor":
         selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
         
         col1, col2 = st.columns(2)
-        
+
+
         with col1:
             st.markdown("### Tutorial Video")
             st.markdown("""
                 <div style="width: 100%; position: relative; padding-top: 56.25%;">
                     <iframe 
-                        src="https://www.youtube.com/embed/iRsWS96g1B8"
+                        src="https://www.youtube.com/embed/Sdw7a-gQzcU"
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
                         frameborder="0" 
                         allowfullscreen>
                     </iframe>
                 </div>
             """, unsafe_allow_html=True)
+
 
             st.markdown("### EduSign Learning Guide")
             guide = learning_guides.get(selected_gesture, {})
