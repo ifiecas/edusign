@@ -36,25 +36,21 @@ st.sidebar.markdown(
 )
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
-
-# Load Machine Learning Model
 @st.cache_resource
 def load_model():
     model_path = "models/sign_language_model.h5"
-    
-    # Create a 'models' folder if it doesn't exist
     os.makedirs("models", exist_ok=True)
 
-    # Check if the model file exists locally
+    # Download the model if it doesn't exist
     if not os.path.exists(model_path):
-        # Google Drive download URL
+        # Direct download URL with confirm parameter
         url = "https://drive.google.com/uc?id=1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2&confirm=t"
         try:
-            st.info("Downloading the model from Google Drive...")
+            st.info("Downloading model from Google Drive...")
             urllib.request.urlretrieve(url, model_path)
             st.success("Model downloaded successfully!")
         except Exception as e:
-            st.error(f"Failed to download the model: {e}")
+            st.error(f"Failed to download model: {e}")
             return None, False
 
     # Load the model
@@ -66,8 +62,11 @@ def load_model():
         st.error(f"Failed to load model: {e}")
         return None, False
 
-# Load the gesture model
 gesture_model, model_loaded = load_model()
+
+if not model_loaded:
+    st.error("Model could not be loaded. Please check the logs.")
+
 
 # MediaPipe Setup
 mp_hands = mp.solutions.hands
