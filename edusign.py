@@ -48,6 +48,7 @@ def load_model():
     file_id = "1pNPo1LAVSwdQopeG2tmDU3gHU4-pyBE2"
     url = f"https://drive.google.com/uc?id={file_id}&export=download"
 
+    # Download the model if it doesn't exist
     if not os.path.exists(model_path):
         try:
             st.info("Downloading model from Google Drive...")
@@ -72,7 +73,8 @@ def load_model():
     # Validate file size
     if os.path.exists(model_path):
         file_size = os.path.getsize(model_path)
-        if file_size < 1000:
+        st.info(f"Downloaded model file size: {file_size} bytes")
+        if file_size < 1000:  # Adjust based on your model size
             st.error("Downloaded file is incomplete.")
             return None, False
 
@@ -84,12 +86,6 @@ def load_model():
     except Exception as e:
         st.error(f"Failed to load model: {e}")
         return None, False
-
-# Ensure load_model() runs and assigns variables
-gesture_model, model_loaded = load_model()
-
-if not model_loaded:
-    st.error("Model could not be loaded. Check the logs.")
 
 
 # MediaPipe Setup
@@ -316,11 +312,11 @@ if page == "Home":
 
 if page == "Sign Language Tutor":
     st.title("🖐️ Meet EduSign - Your AI-Powered Sign Language Tutor")
-    
-    # Check if the model is loaded
+
     if not model_loaded:
         st.error("Model not loaded. Please check the model file and restart.")
-        st.stop()  # Prevent further rendering of the page if the model isn't loaded
+        st.stop()
+
 
     # Select a gesture to learn
     selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
@@ -383,10 +379,11 @@ if page == "Sign Language Tutor":
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting sign language to text and speech, helping deaf students participate in class")
 
-    # Check if the model is loaded
     if not model_loaded:
         st.error("Model not loaded. Please check the model file and restart.")
-        st.stop()  # Prevent further rendering of the page if the model isn't loaded
+        st.stop()
+
+
 
     # CSS styling for the transcription box
     st.markdown("""
