@@ -1,2 +1,9 @@
 packaging==24.2
 pipdeptree==2.24.0
+streamlit
+opencv-python-headless
+mediapipe
+numpy
+tensorflow
+requests
+gTTS
