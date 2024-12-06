@@ -6,9 +6,6 @@ import tensorflow as tf
 import requests
 from gtts import gTTS
 import tempfile
-import os
-port = int(os.environ.get("PORT", 8501))
-app.run(host="0.0.0.0", port=port)
 
 
 # Page Configuration
