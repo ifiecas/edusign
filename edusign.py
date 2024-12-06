@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -58,10 +58,9 @@ def load_model():
 # Load model and setup
 gesture_model, model_loaded = load_model()
 
-# Gesture Classes
+# Gesture Classes and Learning Guides
 gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}
 
-# Learning guides for each gesture
 learning_guides = {
     "Hello": {
         "steps": ["Position hand near forehead", "Palm facing outward", "Extend fingers naturally", "Move hand away in arc"],
@@ -85,11 +84,8 @@ learning_guides = {
     }
 }
 
-
-# Video Transformer Classes
-class GestureTutorTransformer(VideoTransformerBase):
+class GestureTutorProcessor(VideoProcessorBase):
     def __init__(self):
-        # Initialize MediaPipe hands
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
@@ -100,20 +96,13 @@ class GestureTutorTransformer(VideoTransformerBase):
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
 
-    def transform(self, frame):
-        # Convert from WebRTC frame to numpy array
+    def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        
-        # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
-        # Process hands
         results = self.hands.process(rgb_frame)
-        
-        # Draw hand landmarks if detected
+
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -121,8 +110,7 @@ class GestureTutorTransformer(VideoTransformerBase):
                     self.mp_drawing_styles.get_default_hand_landmarks_style(),
                     self.mp_drawing_styles.get_default_hand_connections_style()
                 )
-                
-                # Get hand ROI
+
                 h, w, _ = img.shape
                 x_coords = [lm.x * w for lm in hand_landmarks.landmark]
                 y_coords = [lm.y * h for lm in hand_landmarks.landmark]
@@ -130,7 +118,6 @@ class GestureTutorTransformer(VideoTransformerBase):
                 x_min, x_max = map(int, [min(x_coords), max(x_coords)])
                 y_min, y_max = map(int, [min(y_coords), max(y_coords)])
                 
-                # Add padding
                 padding = 20
                 x_min = max(0, x_min - padding)
                 x_max = min(w, x_max + padding)
@@ -138,22 +125,18 @@ class GestureTutorTransformer(VideoTransformerBase):
                 y_max = min(h, y_max + padding)
                 
                 if x_min < x_max and y_min < y_max:
-                    # Extract and preprocess hand image
                     hand_img = rgb_frame[y_min:y_max, x_min:x_max]
                     hand_img = cv2.resize(hand_img, (224, 224))
                     hand_img = hand_img / 255.0
                     
                     try:
-                        # Predict gesture
                         pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
                         prediction = gesture_classes.get(np.argmax(pred))
                         confidence = float(np.max(pred))
                         
-                        # Update session state
                         st.session_state.current_prediction = prediction
                         st.session_state.current_confidence = confidence
                         
-                        # Draw prediction on frame
                         label = f"{prediction}: {confidence:.2f}"
                         cv2.putText(img, label, (x_min, y_min - 10),
                                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
@@ -162,21 +145,21 @@ class GestureTutorTransformer(VideoTransformerBase):
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-class TranscriptionTransformer(VideoTransformerBase):
+class TranscriptionProcessor(VideoProcessorBase):
     def __init__(self):
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=1,
             min_detection_confidence=0.3,
-            min_tracking_confidence=0.3
+            min_tracking_confidence=0.5
         )
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.last_prediction_time = 0
-        self.prediction_cooldown = 1.0  # Seconds between predictions
+        self.prediction_cooldown = 1.0
 
-    def transform(self, frame):
+    def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
@@ -236,11 +219,18 @@ if page == "Home":
             <img src="https://i.postimg.cc/wjSrs4tM/Blue-Gradient-Header-Banner-1.png" 
                  style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
         </div>
+        
+        <div style="text-align: center; background-color: #f8f9fa; padding: 2.5rem 0; border-radius: 10px;">
+            <h2 style="color: #0f2f76; font-size: 1.8rem; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 0 20px;">
+                EduSign AI is an innovative educational platform developed in partnership with 
+                <span style="color: #0f2f76; font-weight: 700;">Victoria University</span> and powered by 
+                <span style="color: #0f2f76; font-weight: 700;">Microsoft Azure AI</span>. 
+            </h2>
+        </div>
         """,
         unsafe_allow_html=True
     )
-
-    # Main content
+    
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -310,7 +300,7 @@ elif page == "Sign Language Tutor":
             st.markdown("### Practice Area")
             webrtc_ctx = webrtc_streamer(
                 key="gesture-tutor",
-                video_transformer_factory=GestureTutorTransformer,
+                video_processor_factory=GestureTutorProcessor,
                 rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
             )
 
@@ -351,7 +341,7 @@ elif page == "Sign Language to Text":
         st.markdown("### Webcam Feed")
         webrtc_ctx = webrtc_streamer(
             key="transcription",
-            video_transformer_factory=TranscriptionTransformer,
+            video_processor_factory=TranscriptionProcessor,
             rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
         )
 
