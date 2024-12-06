@@ -8,6 +8,7 @@ import requests
 from gtts import gTTS
 import tempfile
 import av
+import time
 
 # Page Configuration
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
@@ -84,113 +85,150 @@ learning_guides = {
     }
 }
 
+
+# Video Transformer Classes
 class GestureTutorTransformer(VideoTransformerBase):
     def __init__(self):
-        self.hands = mp.solutions.hands.Hands(
+        # Initialize MediaPipe hands
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands(
             static_image_mode=False,
-            max_num_hands=2,
-            min_detection_confidence=0.5
+            max_num_hands=1,
+            min_detection_confidence=0.7,
+            min_tracking_confidence=0.5
         )
-        self.mp_drawing = mp.solutions.drawing_utils
+        self.mp_draw = mp.solutions.drawing_utils
+        self.mp_drawing_styles = mp.solutions.drawing_styles
 
     def transform(self, frame):
+        # Convert from WebRTC frame to numpy array
         img = frame.to_ndarray(format="bgr24")
-        frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.hands.process(frame_rgb)
-
+        
+        # Convert BGR to RGB
+        rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # Process hands
+        results = self.hands.process(rgb_frame)
+        
+        # Draw hand landmarks if detected
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                self.mp_drawing.draw_landmarks(
-                    img, 
+                # Draw landmarks
+                self.mp_draw.draw_landmarks(
+                    img,
                     hand_landmarks,
-                    mp.solutions.hands.HAND_CONNECTIONS,
-                    mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
-                    mp.solutions.drawing_styles.get_default_hand_connections_style()
+                    self.mp_hands.HAND_CONNECTIONS,
+                    self.mp_drawing_styles.get_default_hand_landmarks_style(),
+                    self.mp_drawing_styles.get_default_hand_connections_style()
                 )
                 
+                # Get hand ROI
                 h, w, _ = img.shape
                 x_coords = [lm.x * w for lm in hand_landmarks.landmark]
                 y_coords = [lm.y * h for lm in hand_landmarks.landmark]
                 
                 x_min, x_max = map(int, [min(x_coords), max(x_coords)])
                 y_min, y_max = map(int, [min(y_coords), max(y_coords)])
+                
+                # Add padding
                 padding = 20
-                x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
-                y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
+                x_min = max(0, x_min - padding)
+                x_max = min(w, x_max + padding)
+                y_min = max(0, y_min - padding)
+                y_max = min(h, y_max + padding)
                 
                 if x_min < x_max and y_min < y_max:
-                    hand_img = frame_rgb[y_min:y_max, x_min:x_max]
+                    # Extract and preprocess hand image
+                    hand_img = rgb_frame[y_min:y_max, x_min:x_max]
                     hand_img = cv2.resize(hand_img, (224, 224))
                     hand_img = hand_img / 255.0
                     
-                    pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                    prediction = gesture_classes.get(np.argmax(pred))
-                    confidence = float(np.max(pred))
-                    
-                    st.session_state.current_prediction = prediction
-                    st.session_state.current_confidence = confidence
-                    
-                    cv2.putText(img, f"{prediction} ({confidence:.2f})", 
-                              (x_min, y_min - 10),
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                    try:
+                        # Predict gesture
+                        pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                        prediction = gesture_classes.get(np.argmax(pred))
+                        confidence = float(np.max(pred))
+                        
+                        # Update session state
+                        st.session_state.current_prediction = prediction
+                        st.session_state.current_confidence = confidence
+                        
+                        # Draw prediction on frame
+                        label = f"{prediction}: {confidence:.2f}"
+                        cv2.putText(img, label, (x_min, y_min - 10),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                    except Exception as e:
+                        print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 class TranscriptionTransformer(VideoTransformerBase):
     def __init__(self):
-        self.hands = mp.solutions.hands.Hands(
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands(
             static_image_mode=False,
-            max_num_hands=2,
-            min_detection_confidence=0.5
+            max_num_hands=1,
+            min_detection_confidence=0.3,
+            min_tracking_confidence=0.3
         )
-        self.mp_drawing = mp.solutions.drawing_utils
+        self.mp_draw = mp.solutions.drawing_utils
+        self.mp_drawing_styles = mp.solutions.drawing_styles
+        self.last_prediction_time = 0
+        self.prediction_cooldown = 1.0  # Seconds between predictions
 
     def transform(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        frame_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.hands.process(frame_rgb)
-
+        rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(rgb_frame)
+        
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                self.mp_drawing.draw_landmarks(
+                self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
-                    mp.solutions.hands.HAND_CONNECTIONS,
-                    mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
-                    mp.solutions.drawing_styles.get_default_hand_connections_style()
+                    self.mp_hands.HAND_CONNECTIONS,
+                    self.mp_drawing_styles.get_default_hand_landmarks_style(),
+                    self.mp_drawing_styles.get_default_hand_connections_style()
                 )
-
+                
                 h, w, _ = img.shape
                 x_coords = [lm.x * w for lm in hand_landmarks.landmark]
                 y_coords = [lm.y * h for lm in hand_landmarks.landmark]
                 
                 x_min, x_max = map(int, [min(x_coords), max(x_coords)])
                 y_min, y_max = map(int, [min(y_coords), max(y_coords)])
-                padding = 20
-                x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
-                y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
                 
-                if x_min < x_max and y_min < y_max:
-                    hand_img = frame_rgb[y_min:y_max, x_min:x_max]
-                    hand_img = cv2.resize(hand_img, (224, 224))
-                    hand_img = hand_img / 255.0
-                    
-                    pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                    prediction = gesture_classes.get(np.argmax(pred))
-                    confidence = float(np.max(pred))
-                    
-                    if prediction in ["Hello", "Thank You"] and confidence > 0.3:
-                        st.session_state.transcription_text += f"{prediction} "
-                    
-                    cv2.putText(img, f"{prediction} ({confidence:.2f})", 
-                              (x_min, y_min - 10),
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                padding = 20
+                x_min = max(0, x_min - padding)
+                x_max = min(w, x_max + padding)
+                y_min = max(0, y_min - padding)
+                y_max = min(h, y_max + padding)
+                
+                current_time = time.time()
+                if current_time - self.last_prediction_time >= self.prediction_cooldown:
+                    if x_min < x_max and y_min < y_max:
+                        hand_img = rgb_frame[y_min:y_max, x_min:x_max]
+                        hand_img = cv2.resize(hand_img, (224, 224))
+                        hand_img = hand_img / 255.0
+                        
+                        try:
+                            pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                            prediction = gesture_classes.get(np.argmax(pred))
+                            confidence = float(np.max(pred))
+                            
+                            if prediction in ["Hello", "Thank You"] and confidence > 0.3:
+                                st.session_state.transcription_text += f"{prediction} "
+                                self.last_prediction_time = current_time
+                            
+                            label = f"{prediction}: {confidence:.2f}"
+                            cv2.putText(img, label, (x_min, y_min - 10),
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                        except Exception as e:
+                            print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-
-
-# Home page content
+# Page Implementations
 if page == "Home":
     st.markdown(
         """
@@ -198,18 +236,11 @@ if page == "Home":
             <img src="https://i.postimg.cc/wjSrs4tM/Blue-Gradient-Header-Banner-1.png" 
                  style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
         </div>
-        
-        <div style="text-align: center; background-color: #f8f9fa; padding: 2.5rem 0; border-radius: 10px;">
-            <h2 style="color: #0f2f76; font-size: 1.8rem; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 0 20px;">
-                EduSign AI is an innovative educational platform developed in partnership with 
-                <span style="color: #0f2f76; font-weight: 700;">Victoria University</span> and powered by 
-                <span style="color: #0f2f76; font-weight: 700;">Microsoft Azure AI</span>. 
-            </h2>
-        </div>
         """,
         unsafe_allow_html=True
     )
-    
+
+    # Main content
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -248,20 +279,6 @@ if page == "Home":
             unsafe_allow_html=True
         )
 
-    st.markdown(
-        """
-        <footer style="text-align: center; margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 10px;">
-            <div style="max-width: 800px; margin: 0 auto;">
-                <p style="color: #0f2f76; font-weight: 500;">Developed by Ivy Fiecas-Borjal</p>
-                <p style="color: #2a4494;">Victoria University - Accessibility AI Hackathon 2024</p>
-                <a href="https://ifiecas.com/" target="_blank" style="display: inline-block; color: white; background-color: #0f2f76; padding: 0.5rem 1.5rem; border-radius: 25px; text-decoration: none;">View Portfolio</a>
-            </div>
-        </footer>
-        """,
-        unsafe_allow_html=True
-    )
-
-
 elif page == "Sign Language Tutor":
     st.title("🖐️ EduSign - Your Sign Language Tutor")
 
@@ -274,18 +291,6 @@ elif page == "Sign Language Tutor":
         col1, col2 = st.columns(2)
 
         with col1:
-            st.markdown("### Tutorial Video")
-            st.markdown("""
-                <div style="width: 100%; position: relative; padding-top: 56.25%;">
-                    <iframe 
-                        src="https://www.youtube.com/embed/Sdw7a-gQzcU"
-                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-                        frameborder="0" 
-                        allowfullscreen>
-                    </iframe>
-                </div>
-            """, unsafe_allow_html=True)
-
             st.markdown("### Learning Guide")
             guide = learning_guides.get(selected_gesture, {})
             
@@ -312,15 +317,13 @@ elif page == "Sign Language Tutor":
             if webrtc_ctx.state.playing:
                 feedback_container = st.empty()
                 with feedback_container.container():
-                    col1, col2 = st.columns(2)
-                    with col1:
+                    metric_col1, metric_col2 = st.columns(2)
+                    with metric_col1:
                         st.metric("Detected Gesture", 
                                 st.session_state.current_prediction if st.session_state.current_prediction else "None")
-                    with col2:
+                    with metric_col2:
                         st.metric("Confidence", 
                                 f"{st.session_state.current_confidence*100:.1f}%" if st.session_state.current_confidence else "N/A")
-
-
 
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
@@ -359,30 +362,31 @@ elif page == "Sign Language to Text":
             unsafe_allow_html=True
         )
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Clear"):
+        button_col1, button_col2 = st.columns(2)
+        with button_col1:
+            if st.button("Clear Text"):
                 st.session_state.transcription_text = ""
                 st.experimental_rerun()
                 
-            if st.button("Download"):
+            if st.button("Download Text"):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_file:
                     tmp_file.write(st.session_state.transcription_text.encode())
-                    st.download_button("Download Text", tmp_file.name, "transcription.txt")
+                    st.download_button("Download", tmp_file.name, "transcription.txt")
 
-        with col2:
-            if st.button("Listen"):
-                tts = gTTS(st.session_state.transcription_text.strip() or "No text to read")
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
-                    tts.save(tmp_file.name)
-                    with open(tmp_file.name, "rb") as audio_file:
-                        st.audio(audio_file.read(), format="audio/mp3")
-
-
+        with button_col2:
+            if st.button("Listen to Text"):
+                if st.session_state.transcription_text.strip():
+                    tts = gTTS(st.session_state.transcription_text.strip())
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+                        tts.save(tmp_file.name)
+                        with open(tmp_file.name, "rb") as audio_file:
+                            st.audio(audio_file.read(), format="audio/mp3")
+                else:
+                    st.warning("No text to read.")
 
 elif page == "Connect to a Mentor":
     st.title("🖐️ Connect to a Mentor")
-
+    
     mentors = {
         "Beginner": {
             "Alex": "Specializes in foundational signs and building confidence.",
@@ -408,22 +412,8 @@ elif page == "Connect to a Mentor":
         unsafe_allow_html=True
     )
 
-    st.markdown("### Available Mentors")
-    
-    for level, level_mentors in mentors.items():
-        if level == st.session_state.user_level:
-            for mentor, description in level_mentors.items():
-                st.markdown(
-                    f"""
-                    <div style="background: white; padding: 1rem; border-radius: 10px; margin: 10px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                        <h4 style="color: #0f2f76; margin: 0;">{mentor}</h4>
-                        <p style="margin: 5px 0 0 0;">{description}</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-    selected_mentor = st.selectbox("Choose your mentor:", list(mentors[st.session_state.user_level].keys()))
+    level_mentors = mentors.get(st.session_state.user_level, {})
+    selected_mentor = st.selectbox("Choose your mentor:", list(level_mentors.keys()))
     preferred_time = st.select_slider("Select preferred time:", 
                                     options=["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"])
 
