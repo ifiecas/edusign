@@ -1,8 +1,8 @@
-streamlit==1.25.0
-opencv-python-headless==4.8.0.76
-mediapipe==0.10.18
+streamlit>=1.20.0
+opencv-python-headless>=4.8.0
+mediapipe>=0.10.0
 tensorflow>=2.6.0
 numpy>=1.20.0
 requests>=2.26.0
 gTTS>=2.2.4
-Pillow>=10.0.0
+Pillow>=7.1.0,<10.0.0
