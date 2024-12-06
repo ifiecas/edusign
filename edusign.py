@@ -6,6 +6,10 @@ import tensorflow as tf
 import requests
 from gtts import gTTS
 import tempfile
+import os
+port = int(os.environ.get("PORT", 8000))
+app.run(host="0.0.0.0", port=port)
+
 
 # Page Configuration
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
