@@ -1,8 +1,8 @@
 import streamlit as st
 
-# Initialize all session state variables at the start
+# Initialize session state at the top
 st.session_state.setdefault("debug_mode", False)
-st.session_state.setdefault("target_gesture", None)
+st.session_state.setdefault("target_gesture", "None")  # Default to "None"
 st.session_state.setdefault("transcription_text", "")
 st.session_state.setdefault("usage_count", 0)
 st.session_state.setdefault("user_level", "Beginner")
@@ -12,7 +12,7 @@ st.session_state.setdefault("feedback_text", "")
 st.session_state.setdefault("last_transcribed_gesture", None)
 st.session_state.setdefault("real_time_gesture", "")
 st.session_state.setdefault("real_time_confidence", None)
-st.session_state.setdefault("last_detection_time", time.time())
+st.session_state.setdefault("last_detection_time", 0.0)
 
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import cv2
@@ -25,10 +25,8 @@ import tempfile
 import av
 import time
 
-# Page Configuration
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
 
-# Constants
 CONFIDENCE_THRESHOLD = 0.30
 MIN_CONFIDENCE = 0.20
 TRANSCRIPTION_THRESHOLD = 0.30
@@ -54,13 +52,10 @@ def load_model():
         st.error(f"Failed to load model: {e}")
         return None, False
 
-# Load model
 gesture_model, model_loaded = load_model()
 
-# Gesture Classes
 gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}
 
-# Learning guides
 learning_guides = {
     "Hello": {
         "steps": ["Position hand near forehead", "Palm facing outward", "Extend fingers naturally", "Move hand away in arc"],
@@ -86,11 +81,11 @@ learning_guides = {
 
 def get_color_for_confidence(confidence):
     if confidence >= CONFIDENCE_THRESHOLD:
-        return (0, 255, 0)  # Green
+        return (0, 255, 0)
     elif confidence >= MIN_CONFIDENCE:
-        return (0, 255, 255)  # Yellow
+        return (0, 255, 255)
     else:
-        return (0, 0, 255)    # Red
+        return (0, 0, 255)
 
 def generate_feedback(prediction, confidence, target_gesture):
     if prediction is None:
@@ -140,13 +135,12 @@ class GestureTutorProcessor(VideoProcessorBase):
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
 
-        target_gesture = st.session_state.get("target_gesture", None) or "None"
+        target_gesture = st.session_state.get("target_gesture", "None")
         cv2.putText(img, f"Target: {target_gesture}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -177,17 +171,16 @@ class GestureTutorProcessor(VideoProcessorBase):
                         prediction = gesture_classes.get(np.argmax(pred))
                         confidence = float(np.max(pred))
 
-                        st.session_state.current_prediction = prediction
-                        st.session_state.current_confidence = confidence
+                        st.session_state["current_prediction"] = prediction
+                        st.session_state["current_confidence"] = confidence
 
                         feedback_text, feedback_type = generate_feedback(
-                            prediction, confidence, st.session_state.get("target_gesture", None)
+                            prediction, confidence, st.session_state.get("target_gesture", "None")
                         )
-                        st.session_state.feedback_text = feedback_text
+                        st.session_state["feedback_text"] = feedback_text
 
                         color = get_color_for_confidence(confidence)
 
-                        # Draw bounding box
                         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
 
                         label = f"Detected: {prediction} ({confidence:.1%})"
@@ -204,9 +197,9 @@ class GestureTutorProcessor(VideoProcessorBase):
                     except Exception as e:
                         print(f"Prediction error: {e}")
         else:
-            st.session_state.current_prediction = None
-            st.session_state.current_confidence = None
-            st.session_state.feedback_text = "No hand detected. Please show your hand to the camera."
+            st.session_state["current_prediction"] = None
+            st.session_state["current_confidence"] = None
+            st.session_state["feedback_text"] = "No hand detected. Please show your hand to the camera."
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -224,7 +217,7 @@ class TranscriptionProcessor(VideoProcessorBase):
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.last_prediction = None
         self.last_prediction_time = 0
-        self.cooldown = 1.0  # 1 second cooldown
+        self.cooldown = 1.0
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -253,7 +246,6 @@ class TranscriptionProcessor(VideoProcessorBase):
                 x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
                 y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
 
-                # Only process predictions after cooldown
                 if current_time - self.last_prediction_time >= self.cooldown:
                     hand_img = rgb_frame[y_min:y_max, x_min:x_max]
                     hand_img = cv2.resize(hand_img, (224, 224))
@@ -264,29 +256,27 @@ class TranscriptionProcessor(VideoProcessorBase):
                         prediction = gesture_classes.get(np.argmax(pred))
                         confidence = float(np.max(pred))
 
-                        # Show current detection on video
                         label = f"{prediction}: {confidence:.1%}"
                         cv2.putText(img, label, (x_min, y_min - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                        st.session_state.real_time_gesture = prediction
-                        st.session_state.real_time_confidence = confidence
+                        st.session_state["real_time_gesture"] = prediction
+                        st.session_state["real_time_confidence"] = confidence
 
                         if confidence > TRANSCRIPTION_THRESHOLD and prediction != self.last_prediction:
-                            st.session_state.transcription_text += f"{prediction} "
+                            st.session_state["transcription_text"] += f"{prediction} "
                             self.last_prediction = prediction
                             self.last_prediction_time = current_time
 
                     except Exception as e:
                         print(f"Prediction error: {e}")
         else:
-            st.session_state.real_time_gesture = ""
-            st.session_state.real_time_confidence = None
+            st.session_state["real_time_gesture"] = ""
+            st.session_state["real_time_confidence"] = None
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# Sidebar Navigation
 st.sidebar.markdown(
     """
     <div style="text-align: center; margin-bottom: 20px;">
@@ -343,14 +333,14 @@ elif page == "Sign Language Tutor":
     if not model_loaded:
         st.error("Model failed to load. Please check the URL and restart the application.")
     else:
+        # When user selects a gesture, it updates session_state "target_gesture"
         selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
-        st.session_state.target_gesture = selected_gesture
+        st.session_state["target_gesture"] = selected_gesture
 
         col1, col2 = st.columns(2)
 
         with col1:
             st.markdown("### Learning Guide")
-            # YouTube video embed
             st.markdown("""
                 <div style="width: 100%; padding-bottom: 75%; position: relative;">
                     <iframe 
@@ -380,22 +370,20 @@ elif page == "Sign Language Tutor":
             if webrtc_ctx.state.playing:
                 detection_container = st.container()
                 with detection_container:
-                    # Current Detection
                     st.markdown("### Current Detection")
                     cols = st.columns([1, 1])
                     with cols[0]:
-                        detected_gesture = st.session_state.current_prediction if st.session_state.current_prediction else "None"
+                        detected_gesture = st.session_state.get("current_prediction", "None")
                         st.metric("Detected Gesture", detected_gesture)
                     with cols[1]:
-                        confidence = st.session_state.current_confidence
+                        confidence = st.session_state.get("current_confidence", None)
                         if confidence is not None:
                             color = "red" if confidence < CONFIDENCE_THRESHOLD else "green"
                             st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>', 
                                         unsafe_allow_html=True)
 
-                    # Feedback
                     st.markdown("### EduSign AI's Feedback")
-                    feedback = st.session_state.feedback_text
+                    feedback = st.session_state.get("feedback_text", "")
                     if feedback:
                         if "Great job" in feedback:
                             st.success(feedback)
@@ -445,25 +433,26 @@ elif page == "Sign Language to Text":
 
     with col2:
         st.markdown("### Transcribed Text")
+        transcription = st.session_state.get("transcription_text", "Waiting for signs...")
         st.markdown(
-            f'<div class="transcription-box">{st.session_state.transcription_text or "Waiting for signs..."}</div>',
+            f'<div class="transcription-box">{transcription}</div>',
             unsafe_allow_html=True
         )
 
         button_col1, button_col2 = st.columns(2)
         with button_col1:
             if st.button("Clear Text"):
-                st.session_state.transcription_text = ""
+                st.session_state["transcription_text"] = ""
                 st.experimental_rerun()
             
             if st.button("Download Text"):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_file:
-                    tmp_file.write(st.session_state.transcription_text.encode())
+                    tmp_file.write(st.session_state["transcription_text"].encode())
                     st.download_button("Download", tmp_file.name, "transcription.txt")
 
         with button_col2:
             if st.button("Listen to Text"):
-                text_to_speak = st.session_state.transcription_text.strip()
+                text_to_speak = st.session_state["transcription_text"].strip()
                 if text_to_speak:
                     tts = gTTS(text_to_speak)
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
@@ -494,20 +483,20 @@ elif page == "Connect to a Mentor":
     st.markdown(
         f"""
         <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-            <h3>Your Current Level: <span style="color: #0f2f76;">{st.session_state.user_level}</span></h3>
-            <p>Usage Count: {st.session_state.usage_count} sessions</p>
+            <h3>Your Current Level: <span style="color: #0f2f76;">{st.session_state.get("user_level","Beginner")}</span></h3>
+            <p>Usage Count: {st.session_state.get("usage_count",0)} sessions</p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    level_mentors = mentors.get(st.session_state.user_level, {})
+    level_mentors = mentors.get(st.session_state.get("user_level","Beginner"), {})
     selected_mentor = st.selectbox("Choose your mentor:", list(level_mentors.keys()))
     preferred_time = st.select_slider("Select preferred time:", 
                                       options=["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"])
 
     if st.button("Schedule Session"):
-        st.session_state.usage_count += 1
+        st.session_state["usage_count"] = st.session_state.get("usage_count",0) + 1
         st.success(f"✅ Session scheduled with {selected_mentor} at {preferred_time}")
         st.balloons()
 
@@ -516,7 +505,7 @@ elif page == "Connect to a Mentor":
         <div style="background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <h3 style="color: #0f2f76;">About Your Mentor</h3>
             <p style="font-size: 1.1rem;">{level_mentors.get(selected_mentor)}</p>
-            <p style="margin-top: 15px; color: #666;">Available for {st.session_state.user_level} level students</p>
+            <p style="margin-top: 15px; color: #666;">Available for {st.session_state.get("user_level","Beginner")} level students</p>
         </div>
         
         <footer style="text-align: center; margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 10px;">
