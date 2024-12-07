@@ -1,4 +1,19 @@
 import streamlit as st
+
+# Initialize all session state variables at the start
+st.session_state.setdefault("debug_mode", False)
+st.session_state.setdefault("target_gesture", None)
+st.session_state.setdefault("transcription_text", "")
+st.session_state.setdefault("usage_count", 0)
+st.session_state.setdefault("user_level", "Beginner")
+st.session_state.setdefault("current_prediction", None)
+st.session_state.setdefault("current_confidence", None)
+st.session_state.setdefault("feedback_text", "")
+st.session_state.setdefault("last_transcribed_gesture", None)
+st.session_state.setdefault("real_time_gesture", "")
+st.session_state.setdefault("real_time_confidence", None)
+st.session_state.setdefault("last_detection_time", time.time())
+
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import cv2
 import mediapipe as mp
@@ -13,54 +28,11 @@ import time
 # Page Configuration
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
 
-############################################
-# Initialize Session State Variables
-############################################
-if 'transcription_text' not in st.session_state:
-    st.session_state.transcription_text = ""
-if 'usage_count' not in st.session_state:
-    st.session_state.usage_count = 0
-if 'user_level' not in st.session_state:
-    st.session_state.user_level = "Beginner"
-if 'current_prediction' not in st.session_state:
-    st.session_state.current_prediction = None
-if 'current_confidence' not in st.session_state:
-    st.session_state.current_confidence = None
-if 'feedback_text' not in st.session_state:
-    st.session_state.feedback_text = ""
-if 'last_transcribed_gesture' not in st.session_state:
-    st.session_state.last_transcribed_gesture = None
-if 'real_time_gesture' not in st.session_state:
-    st.session_state.real_time_gesture = ""
-if 'real_time_confidence' not in st.session_state:
-    st.session_state.real_time_confidence = None
-if 'last_detection_time' not in st.session_state:
-    st.session_state.last_detection_time = time.time()
-if 'target_gesture' not in st.session_state:
-    st.session_state.target_gesture = None
-if 'debug_mode' not in st.session_state:
-    st.session_state.debug_mode = False
-
-############################################
-# Constants and Configuration
-############################################
+# Constants
 CONFIDENCE_THRESHOLD = 0.30
 MIN_CONFIDENCE = 0.20
 TRANSCRIPTION_THRESHOLD = 0.30
 DISPLAY_THRESHOLD = 0.20
-
-# Sidebar Navigation
-st.sidebar.markdown(
-    """
-    <div style="text-align: center; margin-bottom: 20px;">
-        <img src="https://i.postimg.cc/sgGLzYJV/Learn-Sign-Language.png" 
-             style="width: 80%; height: auto;" alt="Sidebar Image">
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
-
 
 @st.cache_resource
 def load_model():
@@ -73,11 +45,11 @@ def load_model():
                 temp_file.write(chunk)
             temp_file_path = temp_file.name
         model = tf.keras.models.load_model(temp_file_path)
-        if st.session_state.debug_mode:
+        if st.session_state.get("debug_mode", False):
             print("Model loaded successfully!")
         return model, True
     except Exception as e:
-        if st.session_state.debug_mode:
+        if st.session_state.get("debug_mode", False):
             print(f"Model loading error: {e}")
         st.error(f"Failed to load model: {e}")
         return None, False
@@ -168,13 +140,13 @@ class GestureTutorProcessor(VideoProcessorBase):
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
 
-        target_gesture = st.session_state.target_gesture or "None"
+        target_gesture = st.session_state.get("target_gesture", None) or "None"
         cv2.putText(img, f"Target: {target_gesture}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks with lines
+                # Draw hand landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -208,8 +180,9 @@ class GestureTutorProcessor(VideoProcessorBase):
                         st.session_state.current_prediction = prediction
                         st.session_state.current_confidence = confidence
 
-                        # Generate feedback
-                        feedback_text, feedback_type = generate_feedback(prediction, confidence, st.session_state.target_gesture)
+                        feedback_text, feedback_type = generate_feedback(
+                            prediction, confidence, st.session_state.get("target_gesture", None)
+                        )
                         st.session_state.feedback_text = feedback_text
 
                         color = get_color_for_confidence(confidence)
@@ -231,7 +204,6 @@ class GestureTutorProcessor(VideoProcessorBase):
                     except Exception as e:
                         print(f"Prediction error: {e}")
         else:
-            # No hand detected
             st.session_state.current_prediction = None
             st.session_state.current_confidence = None
             st.session_state.feedback_text = "No hand detected. Please show your hand to the camera."
@@ -263,7 +235,6 @@ class TranscriptionProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -282,7 +253,7 @@ class TranscriptionProcessor(VideoProcessorBase):
                 x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
                 y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
 
-                # Only process new predictions after cooldown
+                # Only process predictions after cooldown
                 if current_time - self.last_prediction_time >= self.cooldown:
                     hand_img = rgb_frame[y_min:y_max, x_min:x_max]
                     hand_img = cv2.resize(hand_img, (224, 224))
@@ -298,11 +269,9 @@ class TranscriptionProcessor(VideoProcessorBase):
                         cv2.putText(img, label, (x_min, y_min - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                        # Update real-time gesture info
                         st.session_state.real_time_gesture = prediction
                         st.session_state.real_time_confidence = confidence
 
-                        # Add to transcription if confidence is good and it's a new gesture
                         if confidence > TRANSCRIPTION_THRESHOLD and prediction != self.last_prediction:
                             st.session_state.transcription_text += f"{prediction} "
                             self.last_prediction = prediction
@@ -311,14 +280,24 @@ class TranscriptionProcessor(VideoProcessorBase):
                     except Exception as e:
                         print(f"Prediction error: {e}")
         else:
-            # If no hand detected in this frame
             st.session_state.real_time_gesture = ""
             st.session_state.real_time_confidence = None
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# Page Implementations
+# Sidebar Navigation
+st.sidebar.markdown(
+    """
+    <div style="text-align: center; margin-bottom: 20px;">
+        <img src="https://i.postimg.cc/sgGLzYJV/Learn-Sign-Language.png" 
+             style="width: 80%; height: auto;" alt="Sidebar Image">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
+
 if page == "Home":
     st.markdown(
         """
