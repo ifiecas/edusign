@@ -485,13 +485,13 @@ elif page == "Connect to a Mentor":
     recommended_mentor_description = level_mentors.get(recommended_mentor, "")
 
     # Mentor image URL
-    mentor_image_url = "https://i.ibb.co/v1q7zgS/1.jpg"  # Provided image link
+    mentor_image_url = "https://i.ibb.co/v1q7zgS/1.jpg"
 
     st.markdown(
         f"""
         <div style="background-color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
             <h3 style="color: #0f2f76;">Recommended Mentor for Your Level</h3>
-            <img src="{mentor_image_url}" alt="Recommended Mentor" style="width: 150px; height: auto; border-radius: 50%; margin: 20px 0;">
+            <img src="{mentor_image_url}" alt="Recommended Mentor" style="width: 250px; height: auto; border-radius: 50%; margin: 20px 0;">
             <p style="font-size: 1.1rem;">
                 Based on your current learning path <span style="color: #0f2f76; font-weight: 600;">({user_level})</span>,
                 we recommend connecting with <span style="color: #0f2f76; font-weight: 600;">{recommended_mentor}</span>.
@@ -517,6 +517,7 @@ elif page == "Connect to a Mentor":
         st.session_state["usage_count"] = st.session_state.get("usage_count",0) + 1
         st.success(f"✅ Session scheduled with {selected_mentor} on {preferred_date} at {preferred_time}")
         st.balloons()
+
 
 
 
