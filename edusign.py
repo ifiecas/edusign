@@ -194,6 +194,10 @@ class GestureTutorProcessor(VideoProcessorBase):
                         cv2.putText(img, label, (x_min, y_min - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
+                        # Transcribe at ≥20% confidence
+                        if confidence >= TRANSCRIPTION_THRESHOLD and prediction is not None:
+                            st.session_state["transcription_text"] += f"{prediction} "
+
                     except Exception as e:
                         print(f"Prediction error: {e}")
         else:
@@ -260,9 +264,6 @@ class TranscriptionProcessor(VideoProcessorBase):
                         cv2.putText(img, label, (x_min, y_min - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                        st.session_state["real_time_gesture"] = prediction
-                        st.session_state["real_time_confidence"] = confidence
-
                         if confidence > TRANSCRIPTION_THRESHOLD and prediction != self.last_prediction:
                             st.session_state["transcription_text"] += f"{prediction} "
                             self.last_prediction = prediction
@@ -270,9 +271,6 @@ class TranscriptionProcessor(VideoProcessorBase):
 
                     except Exception as e:
                         print(f"Prediction error: {e}")
-        else:
-            st.session_state["real_time_gesture"] = ""
-            st.session_state["real_time_confidence"] = None
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -332,7 +330,6 @@ elif page == "Sign Language Tutor":
     if not model_loaded:
         st.error("Model failed to load. Please check the URL and restart the application.")
     else:
-        # When user selects a gesture, it updates session_state "target_gesture"
         selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
         st.session_state["target_gesture"] = selected_gesture
 
@@ -363,37 +360,36 @@ elif page == "Sign Language Tutor":
                 key="gesture-tutor",
                 video_processor_factory=GestureTutorProcessor,
                 rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-                media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False}
+                media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False},
+                async_processing=False
             )
 
             if webrtc_ctx.state.playing:
-                detection_container = st.container()
-                with detection_container:
-                    st.markdown("### Current Detection")
-                    cols = st.columns([1, 1])
-                    with cols[0]:
-                        detected_gesture = st.session_state.get("current_prediction", "None")
-                        st.metric("Detected Gesture", detected_gesture)
-                    with cols[1]:
-                        confidence = st.session_state.get("current_confidence", None)
-                        if confidence is not None:
-                            color = "red" if confidence < CONFIDENCE_THRESHOLD else "green"
-                            st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>', 
-                                        unsafe_allow_html=True)
+                st.markdown("### Current Detection")
+                cols = st.columns([1, 1])
+                with cols[0]:
+                    detected_gesture = st.session_state.get("current_prediction", "None")
+                    st.metric("Detected Gesture", detected_gesture)
+                with cols[1]:
+                    confidence = st.session_state.get("current_confidence", None)
+                    if confidence is not None:
+                        color = "red" if confidence < CONFIDENCE_THRESHOLD else "green"
+                        st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>', 
+                                    unsafe_allow_html=True)
 
-                    st.markdown("### EduSign AI's Feedback")
-                    feedback = st.session_state.get("feedback_text", "")
-                    if feedback:
-                        if "Great job" in feedback:
-                            st.success(feedback)
-                        elif "Getting better" in feedback or "Trying to learn" in feedback:
-                            st.warning(feedback)
-                        elif "No hand detected" in feedback:
-                            st.info(feedback)
-                        else:
-                            st.warning(feedback)
+                st.markdown("### EduSign AI's Feedback")
+                feedback = st.session_state.get("feedback_text", "")
+                if feedback:
+                    if "Great job" in feedback:
+                        st.success(feedback)
+                    elif "Getting better" in feedback or "Trying to learn" in feedback:
+                        st.warning(feedback)
+                    elif "No hand detected" in feedback:
+                        st.info(feedback)
                     else:
-                        st.info("Show your hand to get feedback")
+                        st.warning(feedback)
+                else:
+                    st.info("Show your hand to get feedback")
 
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
@@ -409,13 +405,6 @@ elif page == "Sign Language to Text":
             color: #333;
             margin-top: 20px;
         }
-        .detection-box {
-            background-color: #e3f2fd;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
-            font-size: 1.2rem;
-        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -427,7 +416,8 @@ elif page == "Sign Language to Text":
             key="transcription",
             video_processor_factory=TranscriptionProcessor,
             rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-            media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False}
+            media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False},
+            async_processing=False
         )
 
     with col2:
@@ -506,18 +496,24 @@ elif page == "Connect to a Mentor":
             <p style="font-size: 1.1rem;">{level_mentors.get(selected_mentor)}</p>
             <p style="margin-top: 15px; color: #666;">Available for {st.session_state.get("user_level","Beginner")} level students</p>
         </div>
-        
-        <footer style="text-align: center; margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 10px;">
-            <div style="max-width: 800px; margin: 0 auto;">
-                <p style="color: #0f2f76; font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem;">
-                    Developed by Ivy Fiecas-Borjal
-                </p>
-                <p style="color: #2a4494; font-size: 1rem; margin-bottom: 1rem;">
-                    For the Victoria University - Accessibility AI Hackathon 2024
-                </p>
-                <a href="https://ifiecas.com/" target="_blank" style="display: inline-block; color: white; background-color: #0f2f76; padding: 0.5rem 1.5rem; border-radius: 25px; text-decoration: none;">View Portfolio</a>
-            </div>
-        </footer>
         """,
         unsafe_allow_html=True
     )
+
+# Add a universal footer for all pages
+st.markdown(
+    """
+    <footer style="text-align: center; margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 10px;">
+        <div style="max-width: 800px; margin: 0 auto;">
+            <p style="color: #0f2f76; font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem;">
+                Developed by Ivy Fiecas-Borjal
+            </p>
+            <p style="color: #2a4494; font-size: 1rem; margin-bottom: 1rem;">
+                For the Victoria University - Accessibility AI Hackathon 2024
+            </p>
+            <a href="https://ifiecas.com/" target="_blank" style="display: inline-block; color: white; background-color: #0f2f76; padding: 0.5rem 1.5rem; border-radius: 25px; text-decoration: none;">View Portfolio</a>
+        </div>
+    </footer>
+    """,
+    unsafe_allow_html=True
+)
