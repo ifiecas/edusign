@@ -243,8 +243,6 @@ class GestureTutorProcessor(VideoProcessorBase):
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.last_prediction_time = 0
         self.prediction_cooldown = 0.2
-        if st.session_state.debug_mode:
-            print("GestureTutorProcessor initialized")
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -255,11 +253,9 @@ class GestureTutorProcessor(VideoProcessorBase):
         cv2.putText(img, "Detection Active", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
-        current_time = time.time()
-
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks
+                # Draw landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -282,57 +278,43 @@ class GestureTutorProcessor(VideoProcessorBase):
                 y_min = max(0, y_min - padding)
                 y_max = min(h, y_max + padding)
 
-                # Draw bounding box
-                cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+                # Process hand region
+                if x_min < x_max and y_min < y_max:
+                    hand_img = rgb_frame[y_min:y_max, x_min:x_max]
+                    hand_img = cv2.resize(hand_img, (224, 224))
+                    hand_img = hand_img / 255.0
 
-                if current_time - self.last_prediction_time >= self.prediction_cooldown:
-                    if x_min < x_max and y_min < y_max:
-                        hand_img = rgb_frame[y_min:y_max, x_min:x_max]
-                        hand_img = cv2.resize(hand_img, (224, 224))
-                        hand_img = hand_img / 255.0
+                    try:
+                        # Make prediction
+                        pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                        prediction = gesture_classes.get(np.argmax(pred))
+                        confidence = float(np.max(pred))
 
-                        try:
-                            if st.session_state.debug_mode:
-                                print("Making prediction...")
-                            
-                            pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                            prediction = gesture_classes.get(np.argmax(pred))
-                            confidence = float(np.max(pred))
+                        # Update session states
+                        st.session_state.current_prediction = prediction
+                        st.session_state.current_confidence = confidence
 
-                            if st.session_state.debug_mode:
-                                print(f"Prediction: {prediction}, Confidence: {confidence:.2f}")
+                        # Draw prediction on frame
+                        color = get_color_for_confidence(confidence)
+                        label = f"{prediction}: {confidence:.2f}"
+                        
+                        # Draw white background for text
+                        (text_width, text_height), _ = cv2.getTextSize(
+                            label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+                        cv2.rectangle(img, 
+                                    (x_min, y_min - text_height - 10),
+                                    (x_min + text_width, y_min),
+                                    (255, 255, 255),
+                                    -1)
+                        
+                        cv2.putText(img, label, (x_min, y_min - 10),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
-                            # Update session states
-                            st.session_state.current_prediction = prediction
-                            st.session_state.current_confidence = confidence
+                        # Draw bounding box
+                        cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
 
-                            # Generate feedback
-                            feedback, _ = generate_feedback(
-                                prediction, confidence, st.session_state.current_gesture
-                            )
-                            st.session_state.feedback_text = feedback
-
-                            # Draw prediction on frame
-                            color = get_color_for_confidence(confidence)
-                            label = f"{prediction}: {confidence:.2f}"
-                            
-                            # Draw white background for text
-                            (text_width, text_height), _ = cv2.getTextSize(
-                                label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-                            cv2.rectangle(img, 
-                                        (x_min, y_min - text_height - 10),
-                                        (x_min + text_width, y_min),
-                                        (255, 255, 255),
-                                        -1)
-                            
-                            cv2.putText(img, label, (x_min, y_min - 10),
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-
-                            self.last_prediction_time = current_time
-
-                        except Exception as e:
-                            if st.session_state.debug_mode:
-                                print(f"Prediction error: {e}")
+                    except Exception as e:
+                        print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -349,15 +331,11 @@ class TranscriptionProcessor(VideoProcessorBase):
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.last_prediction_time = 0
         self.prediction_cooldown = 0.5
-        if st.session_state.debug_mode:
-            print("TranscriptionProcessor initialized")
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
-
-        current_time = time.time()
 
         # Add detection status
         cv2.putText(img, "Detection Active", (10, 30),
@@ -365,7 +343,7 @@ class TranscriptionProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks
+                # Draw landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -387,53 +365,49 @@ class TranscriptionProcessor(VideoProcessorBase):
                 y_min = max(0, y_min - padding)
                 y_max = min(h, y_max + padding)
 
-                # Draw bounding box
-                cv2.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+                if x_min < x_max and y_min < y_max:
+                    hand_img = rgb_frame[y_min:y_max, x_min:x_max]
+                    hand_img = cv2.resize(hand_img, (224, 224))
+                    hand_img = hand_img / 255.0
 
-                if current_time - self.last_prediction_time >= self.prediction_cooldown:
-                    if x_min < x_max and y_min < y_max:
-                        hand_img = rgb_frame[y_min:y_max, x_min:x_max]
-                        hand_img = cv2.resize(hand_img, (224, 224))
-                        hand_img = hand_img / 255.0
+                    try:
+                        pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                        prediction = gesture_classes.get(np.argmax(pred))
+                        confidence = float(np.max(pred))
 
-                        try:
-                            pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                            prediction = gesture_classes.get(np.argmax(pred))
-                            confidence = float(np.max(pred))
+                        # Update real-time detection
+                        st.session_state.real_time_gesture = prediction
+                        st.session_state.real_time_confidence = confidence
 
-                            # Update real-time detection
-                            st.session_state.real_time_gesture = prediction
-                            st.session_state.real_time_confidence = confidence
+                        # Add to transcription if confidence is high enough
+                        if confidence > DISPLAY_THRESHOLD:
+                            st.session_state.transcription_text += f"{prediction} "
+                            self.last_prediction_time = time.time()
 
-                            # Add to transcription if confidence is high enough
-                            if confidence > DISPLAY_THRESHOLD:
-                                if (prediction != st.session_state.last_transcribed_gesture or 
-                                    current_time - self.last_prediction_time > 2.0):
-                                    st.session_state.transcription_text += f"{prediction} "
-                                    st.session_state.last_transcribed_gesture = prediction
-                                    self.last_prediction_time = current_time
+                        # Draw prediction on frame
+                        color = get_color_for_confidence(confidence)
+                        label = f"{prediction}: {confidence:.2f}"
+                        
+                        # Draw white background for text
+                        (text_width, text_height), _ = cv2.getTextSize(
+                            label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+                        cv2.rectangle(img, 
+                                    (x_min, y_min - text_height - 10),
+                                    (x_min + text_width, y_min),
+                                    (255, 255, 255),
+                                    -1)
+                        
+                        cv2.putText(img, label, (x_min, y_min - 10),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
-                            # Draw prediction on frame
-                            color = get_color_for_confidence(confidence)
-                            label = f"{prediction}: {confidence:.2f}"
-                            
-                            # Draw white background for text
-                            (text_width, text_height), _ = cv2.getTextSize(
-                                label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-                            cv2.rectangle(img, 
-                                        (x_min, y_min - text_height - 10),
-                                        (x_min + text_width, y_min),
-                                        (255, 255, 255),
-                                        -1)
-                            
-                            cv2.putText(img, label, (x_min, y_min - 10),
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                        # Draw bounding box
+                        cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
 
-                        except Exception as e:
-                            if st.session_state.debug_mode:
-                                print(f"Prediction error: {e}")
+                    except Exception as e:
+                        print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
+
 
 # Page Implementations
 if page == "Home":
