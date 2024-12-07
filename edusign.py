@@ -290,7 +290,8 @@ if page == "Home":
     st.markdown(
         """
         <div style="text-align: center; margin-bottom: 40px;">
-            <img src="https://ibb.co/H2QPwtc" alt="" border="0" style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
+            <img src="https://i.ibb.co/4fxSv8b/Blue-Gradient-Header-Banner-5.png" 
+                 style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
         </div>
         
         <div style="text-align: center; background-color: #f8f9fa; padding: 2.5rem 0; border-radius: 10px;">
