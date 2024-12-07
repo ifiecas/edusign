@@ -131,7 +131,7 @@ class GestureTutorProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Always draw lines on the hands
+                # Draw landmarks on hands
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -168,7 +168,7 @@ class GestureTutorProcessor(VideoProcessorBase):
                         feedback_text, feedback_type = generate_feedback(prediction, confidence, target_gesture)
                         st.session_state.feedback_text = feedback_text
 
-                        # Transcribe immediately if confidence ≥ 20%
+                        # Transcribe at ≥20% confidence
                         if confidence >= TRANSCRIPTION_THRESHOLD and prediction is not None:
                             st.session_state.transcription_text += f"{prediction} "
 
@@ -214,7 +214,7 @@ class TranscriptionProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw lines on hands
+                # Draw landmarks on hands
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -254,6 +254,7 @@ class TranscriptionProcessor(VideoProcessorBase):
                     print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
+
 
 st.sidebar.markdown(
     """
@@ -344,6 +345,7 @@ elif page == "Sign Language Tutor":
             webrtc_ctx = webrtc_streamer(
                 key="gesture-tutor",
                 video_processor_factory=GestureTutorProcessor,
+                async_processing=False,  # Disable async to reduce ScriptRunContext warnings
                 rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
                 media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False}
             )
@@ -378,7 +380,7 @@ elif page == "Sign Language Tutor":
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
 
-    # Put the video feed on the left and the transcription on the right.
+    # Video feed on the left, transcription on the right
     col1, col2 = st.columns([1, 1])
 
     with col1:
@@ -386,6 +388,7 @@ elif page == "Sign Language to Text":
         webrtc_ctx = webrtc_streamer(
             key="transcription",
             video_processor_factory=TranscriptionProcessor,
+            async_processing=False,  # Disable async
             rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
             media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False}
         )
@@ -394,7 +397,9 @@ elif page == "Sign Language to Text":
         st.markdown("### Transcribed Text")
         transcription = st.session_state.transcription_text.strip() or "Waiting for signs..."
         st.markdown(
-            f'<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 1.5rem; color: #333; margin-top: 20px;">{transcription}</div>',
+            f'<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; '
+            f'box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 1.5rem; color: #333; margin-top: 20px;">'
+            f'{transcription}</div>',
             unsafe_allow_html=True
         )
 
