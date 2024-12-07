@@ -17,7 +17,6 @@ session_state_vars = {
     'transcription_text': "",
     'usage_count': 0,
     'user_level': "Beginner",
-    'current_gesture': None,
     'current_prediction': None,
     'current_confidence': None,
     'feedback_text': "",
@@ -32,9 +31,9 @@ for var_name, default_value in session_state_vars.items():
         st.session_state[var_name] = default_value
 
 # Constants
-CONFIDENCE_THRESHOLD = 0.30  # For display feedback colors
+CONFIDENCE_THRESHOLD = 0.30
 MIN_CONFIDENCE = 0.20
-TRANSCRIPTION_THRESHOLD = 0.20  # At or above 20% confidence, we transcribe
+TRANSCRIPTION_THRESHOLD = 0.20  # Transcribe gestures at or above 20% confidence
 
 @st.cache_resource
 def load_model():
@@ -102,8 +101,7 @@ def generate_feedback(prediction, confidence, target_gesture):
             feedback += f"• {tip}\n"
         return feedback, "error"
     elif prediction != target_gesture:
-        feedback += f"Trying to learn: '{target_gesture}'\n\n"
-        feedback += "Remember these steps:\n"
+        feedback += f"Trying to learn: '{target_gesture}'\n\nRemember these steps:\n"
         for step in learning_guides[target_gesture]["steps"]:
             feedback += f"• {step}\n"
         return feedback, "warning"
@@ -139,6 +137,7 @@ class GestureTutorProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
+                # Draw hand landmarks and connections
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -174,6 +173,10 @@ class GestureTutorProcessor(VideoProcessorBase):
 
                         feedback_text, feedback_type = generate_feedback(prediction, confidence, target_gesture)
                         st.session_state.feedback_text = feedback_text
+
+                        # If confidence ≥ transcription threshold, transcribe the gesture
+                        if confidence >= TRANSCRIPTION_THRESHOLD and prediction is not None:
+                            st.session_state.transcription_text += f"{prediction} "
 
                         color = get_color_for_confidence(confidence)
                         label = f"Detected: {prediction} ({confidence:.1%})"
@@ -222,6 +225,7 @@ class TranscriptionProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
+                # Draw hand landmarks and connections
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -234,8 +238,8 @@ class TranscriptionProcessor(VideoProcessorBase):
                 x_coords = [lm.x * w for lm in hand_landmarks.landmark]
                 y_coords = [lm.y * h for lm in hand_landmarks.landmark]
 
-                x_min, x_max = int(min(x_coords)), int(max(x_coords))
-                y_min, y_max = int(min(y_coords)), int(max(y_coords))
+                x_min, x_max = map(int, [min(x_coords), max(x_coords)])
+                y_min, y_max = map(int, [min(y_coords), max(y_coords)])
                 padding = 20
                 x_min = max(0, x_min - padding)
                 x_max = min(w, x_max + padding)
@@ -256,21 +260,20 @@ class TranscriptionProcessor(VideoProcessorBase):
                         cv2.putText(img, label, (x_min, y_min - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                        # Transcribe if confidence ≥ 20%
-                        if confidence >= TRANSCRIPTION_THRESHOLD:
+                        if confidence >= TRANSCRIPTION_THRESHOLD and prediction is not None:
                             st.session_state.transcription_text += f"{prediction} "
                             self.last_prediction_time = current_time
 
                     except Exception as e:
                         print(f"Prediction error: {e}")
+
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# Sidebar Navigation
 st.sidebar.markdown(
     """
     <div style="text-align: center; margin-bottom: 20px;">
-        <img src="https://i.postimg.cc/sgGLzYJV/Learn-Sign-Language.png" 
+        <img src="https://i.postimg.cc/sgGLzYJV/Learn-Sign-Language.png"
              style="width: 80%; height: auto;" alt="Sidebar Image">
     </div>
     """,
@@ -278,33 +281,32 @@ st.sidebar.markdown(
 )
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
 
-
 if page == "Home":
     st.markdown(
         """
         <div style="text-align: center; margin-bottom: 40px;">
-            <img src="https://i.postimg.cc/wjSrs4tM/Blue-Gradient-Header-Banner-1.png" 
+            <img src="https://i.postimg.cc/wjSrs4tM/Blue-Gradient-Header-Banner-1.png"
                  style="width: 100%; max-width: 1000px; height: auto;" alt="EduSign Header">
         </div>
         
         <div style="text-align: center; background-color: #f8f9fa; padding: 2.5rem 0; border-radius: 10px;">
             <h2 style="color: #0f2f76; font-size: 1.8rem; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 0 20px;">
-                EduSign AI is an innovative educational platform developed in partnership with 
-                <span style="color: #0f2f76; font-weight: 700;">Victoria University</span> and powered by 
-                <span style="color: #0f2f76; font-weight: 700;">Microsoft Azure AI</span>. 
+                EduSign AI is an innovative educational platform developed in partnership with
+                <span style="color: #0f2f76; font-weight: 700;">Victoria University</span> and powered by
+                <span style="color: #0f2f76; font-weight: 700;">Microsoft Azure AI</span>.
             </h2>
         </div>
         """,
         unsafe_allow_html=True
     )
-    
+
     col1, col2, col3 = st.columns(3)
     features = [
         ("🎯", "Smart Learning", "AI-powered real-time feedback"),
         ("📱", "Instant Translation", "Sign-to-text conversion"),
         ("🤝", "Expert Guidance", "Learn from certified mentors")
     ]
-    
+
     for col, (emoji, title, desc) in zip([col1, col2, col3], features):
         with col:
             st.markdown(
@@ -328,7 +330,6 @@ elif page == "Sign Language Tutor":
         st.session_state.target_gesture = selected_gesture
 
         col1, col2 = st.columns(2)
-
         with col1:
             st.markdown("### Learning Guide")
             st.markdown("""
@@ -336,13 +337,13 @@ elif page == "Sign Language Tutor":
                     <iframe 
                         src="https://www.youtube.com/embed/Sdw7a-gQzcU"
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-                        frameborder="0" 
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowfullscreen>
                     </iframe>
                 </div>
                 """, unsafe_allow_html=True)
-            
+
             guide = learning_guides.get(selected_gesture, {})
             st.markdown(f"#### Steps for '{selected_gesture}':")
             for step in guide.get("steps", []):
@@ -369,7 +370,7 @@ elif page == "Sign Language Tutor":
                         confidence = st.session_state.current_confidence
                         if confidence is not None:
                             color = "red" if confidence < CONFIDENCE_THRESHOLD else "green"
-                            st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>', 
+                            st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>',
                                         unsafe_allow_html=True)
 
                     st.markdown("### EduSign AI's Feedback")
@@ -388,20 +389,6 @@ elif page == "Sign Language Tutor":
 
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
-    
-    st.markdown("""
-    <style>
-        .transcription-box {
-            background-color: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            font-size: 1.5rem;
-            color: #333;
-            margin-top: 20px;
-        }
-    </style>
-    """, unsafe_allow_html=True)
 
     webrtc_ctx = webrtc_streamer(
         key="transcription",
@@ -419,7 +406,7 @@ elif page == "Sign Language to Text":
         st.markdown("### Transcribed Text")
         transcription = st.session_state.transcription_text or "Waiting for signs..."
         st.markdown(
-            f'<div class="transcription-box">{transcription}</div>',
+            f'<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 1.5rem; color: #333; margin-top: 20px;">{transcription}</div>',
             unsafe_allow_html=True
         )
 
@@ -448,7 +435,7 @@ elif page == "Sign Language to Text":
 
 elif page == "Connect to a Mentor":
     st.title("🖐️ Connect to a Mentor")
-    
+
     mentors = {
         "Beginner": {
             "Alex": "Specializes in foundational signs and building confidence.",
