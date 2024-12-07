@@ -7,7 +7,6 @@ import tensorflow as tf
 import requests
 from gtts import gTTS
 import tempfile
-import av
 import time
 
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
@@ -20,9 +19,6 @@ session_state_vars = {
     'current_prediction': None,
     'current_confidence': None,
     'feedback_text': "",
-    'real_time_gesture': "",
-    'real_time_confidence': None,
-    'last_detection_time': time.time(),
     'target_gesture': None
 }
 
@@ -80,21 +76,19 @@ learning_guides = {
 
 def get_color_for_confidence(confidence):
     if confidence >= CONFIDENCE_THRESHOLD:
-        return (0, 255, 0)  # Green
+        return (0, 255, 0)
     elif confidence >= MIN_CONFIDENCE:
-        return (0, 255, 255)  # Yellow
+        return (0, 255, 255)
     else:
-        return (0, 0, 255)    # Red
+        return (0, 0, 255)
 
 def generate_feedback(prediction, confidence, target_gesture):
     if prediction is None:
         return "No hand detected. Please show your hand to the camera.", "info"
-    
     if not target_gesture or target_gesture not in learning_guides:
         return "No target gesture selected or invalid target gesture.", "info"
 
     feedback = f"Detected: {prediction} ({confidence:.1%})\n\n"
-
     if confidence <= MIN_CONFIDENCE:
         feedback += f"Tips for '{target_gesture}':\n"
         for tip in learning_guides[target_gesture]["tips"]:
@@ -174,7 +168,7 @@ class GestureTutorProcessor(VideoProcessorBase):
                         feedback_text, feedback_type = generate_feedback(prediction, confidence, target_gesture)
                         st.session_state.feedback_text = feedback_text
 
-                        # If confidence ≥ transcription threshold, transcribe the gesture
+                        # Transcribe immediately if confidence ≥ 20%
                         if confidence >= TRANSCRIPTION_THRESHOLD and prediction is not None:
                             st.session_state.transcription_text += f"{prediction} "
 
@@ -191,7 +185,6 @@ class GestureTutorProcessor(VideoProcessorBase):
                         cv2.putText(img, label, (x_min, y_min - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
                         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
-
                     except Exception as e:
                         print(f"Prediction error: {e}")
         else:
@@ -213,15 +206,11 @@ class TranscriptionProcessor(VideoProcessorBase):
         )
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
-        self.last_prediction_time = 0
-        self.cooldown = 1.0  # 1 second cooldown
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
-
-        current_time = time.time()
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
@@ -246,30 +235,29 @@ class TranscriptionProcessor(VideoProcessorBase):
                 y_min = max(0, y_min - padding)
                 y_max = min(h, y_max + padding)
 
-                if current_time - self.last_prediction_time >= self.cooldown:
-                    hand_img = rgb_frame[y_min:y_max, x_min:x_max]
-                    hand_img = cv2.resize(hand_img, (224, 224))
-                    hand_img = hand_img / 255.0
+                hand_img = rgb_frame[y_min:y_max, x_min:x_max]
+                hand_img = cv2.resize(hand_img, (224, 224))
+                hand_img = hand_img / 255.0
 
-                    try:
-                        pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                        prediction = gesture_classes.get(np.argmax(pred))
-                        confidence = float(np.max(pred))
+                try:
+                    pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                    prediction = gesture_classes.get(np.argmax(pred))
+                    confidence = float(np.max(pred))
 
-                        label = f"{prediction}: {confidence:.1%}"
-                        cv2.putText(img, label, (x_min, y_min - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                    label = f"{prediction}: {confidence:.1%}"
+                    cv2.putText(img, label, (x_min, y_min - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                        if confidence >= TRANSCRIPTION_THRESHOLD and prediction is not None:
-                            st.session_state.transcription_text += f"{prediction} "
-                            self.last_prediction_time = current_time
-
-                    except Exception as e:
-                        print(f"Prediction error: {e}")
+                    # Transcribe immediately if confidence ≥ 20%
+                    if confidence >= TRANSCRIPTION_THRESHOLD and prediction is not None:
+                        st.session_state.transcription_text += f"{prediction} "
+                except Exception as e:
+                    print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
+# Sidebar Navigation
 st.sidebar.markdown(
     """
     <div style="text-align: center; margin-bottom: 20px;">
@@ -306,7 +294,6 @@ if page == "Home":
         ("📱", "Instant Translation", "Sign-to-text conversion"),
         ("🤝", "Expert Guidance", "Learn from certified mentors")
     ]
-
     for col, (emoji, title, desc) in zip([col1, col2, col3], features):
         with col:
             st.markdown(
@@ -330,24 +317,30 @@ elif page == "Sign Language Tutor":
         st.session_state.target_gesture = selected_gesture
 
         col1, col2 = st.columns(2)
+
         with col1:
             st.markdown("### Learning Guide")
             st.markdown("""
                 <div style="width: 100%; padding-bottom: 75%; position: relative;">
-                    <iframe 
+                    <iframe
                         src="https://www.youtube.com/embed/Sdw7a-gQzcU"
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
                         frameborder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowfullscreen>
                     </iframe>
                 </div>
                 """, unsafe_allow_html=True)
 
             guide = learning_guides.get(selected_gesture, {})
-            st.markdown(f"#### Steps for '{selected_gesture}':")
+            st.markdown("#### Steps:")
             for step in guide.get("steps", []):
                 st.markdown(f"- {step}")
+            st.markdown("#### Tips:")
+            for tip in guide.get("tips", []):
+                st.markdown(f"- {tip}")
+            st.markdown("#### Common Mistakes:")
+            for mistake in guide.get("mistakes", []):
+                st.markdown(f"- {mistake}")
 
         with col2:
             st.markdown("### Practice Area")
@@ -359,33 +352,31 @@ elif page == "Sign Language Tutor":
             )
 
             if webrtc_ctx.state.playing:
-                detection_container = st.container()
-                with detection_container:
-                    st.markdown("### Current Detection")
-                    cols = st.columns([1, 1])
-                    with cols[0]:
-                        detected_gesture = st.session_state.current_prediction if st.session_state.current_prediction else "None"
-                        st.metric("Detected Gesture", detected_gesture)
-                    with cols[1]:
-                        confidence = st.session_state.current_confidence
-                        if confidence is not None:
-                            color = "red" if confidence < CONFIDENCE_THRESHOLD else "green"
-                            st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>',
-                                        unsafe_allow_html=True)
+                st.markdown("### Current Detection")
+                cols = st.columns([1, 1])
+                with cols[0]:
+                    detected_gesture = st.session_state.current_prediction if st.session_state.current_prediction else "None"
+                    st.metric("Detected Gesture", detected_gesture)
+                with cols[1]:
+                    confidence = st.session_state.current_confidence
+                    if confidence is not None:
+                        color = "red" if confidence < CONFIDENCE_THRESHOLD else "green"
+                        st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>',
+                                    unsafe_allow_html=True)
 
-                    st.markdown("### EduSign AI's Feedback")
-                    feedback = st.session_state.feedback_text
-                    if feedback:
-                        if "Great job" in feedback:
-                            st.success(feedback)
-                        elif "Getting better" in feedback or "Trying to learn" in feedback:
-                            st.warning(feedback)
-                        elif "No hand detected" in feedback:
-                            st.info(feedback)
-                        else:
-                            st.warning(feedback)
+                st.markdown("### EduSign AI's Feedback")
+                feedback = st.session_state.feedback_text
+                if feedback:
+                    if "Great job" in feedback:
+                        st.success(feedback)
+                    elif "Getting better" in feedback or "Trying to learn" in feedback:
+                        st.warning(feedback)
+                    elif "No hand detected" in feedback:
+                        st.info(feedback)
                     else:
-                        st.info("Show your hand to get feedback")
+                        st.warning(feedback)
+                else:
+                    st.info("Show your hand to get feedback")
 
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
@@ -404,7 +395,7 @@ elif page == "Sign Language to Text":
 
     with col2:
         st.markdown("### Transcribed Text")
-        transcription = st.session_state.transcription_text or "Waiting for signs..."
+        transcription = st.session_state.transcription_text.strip() or "Waiting for signs..."
         st.markdown(
             f'<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 1.5rem; color: #333; margin-top: 20px;">{transcription}</div>',
             unsafe_allow_html=True
@@ -463,33 +454,10 @@ elif page == "Connect to a Mentor":
 
     level_mentors = mentors.get(st.session_state.user_level, {})
     selected_mentor = st.selectbox("Choose your mentor:", list(level_mentors.keys()))
-    preferred_time = st.select_slider("Select preferred time:", 
+    preferred_time = st.select_slider("Select preferred time:",
                                       options=["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"])
 
     if st.button("Schedule Session"):
         st.session_state.usage_count += 1
         st.success(f"✅ Session scheduled with {selected_mentor} at {preferred_time}")
         st.balloons()
-
-    st.markdown(
-        f"""
-        <div style="background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h3 style="color: #0f2f76;">About Your Mentor</h3>
-            <p style="font-size: 1.1rem;">{level_mentors.get(selected_mentor)}</p>
-            <p style="margin-top: 15px; color: #666;">Available for {st.session_state.user_level} level students</p>
-        </div>
-        
-        <footer style="text-align: center; margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 10px;">
-            <div style="max-width: 800px; margin: 0 auto;">
-                <p style="color: #0f2f76; font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem;">
-                    Developed by Ivy Fiecas-Borjal
-                </p>
-                <p style="color: #2a4494; font-size: 1rem; margin-bottom: 1rem;">
-                    For the Victoria University - Accessibility AI Hackathon 2024
-                </p>
-                <a href="https://ifiecas.com/" target="_blank" style="display: inline-block; color: white; background-color: #0f2f76; padding: 0.5rem 1.5rem; border-radius: 25px; text-decoration: none;">View Portfolio</a>
-            </div>
-        </footer>
-        """,
-        unsafe_allow_html=True
-    )
