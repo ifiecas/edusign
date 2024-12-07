@@ -26,6 +26,8 @@ if 'current_prediction' not in st.session_state:
     st.session_state.current_prediction = None
 if 'current_confidence' not in st.session_state:
     st.session_state.current_confidence = None
+if 'feedback_text' not in st.session_state:
+    st.session_state.feedback_text = ""
 
 # Sidebar Navigation
 st.sidebar.markdown(
@@ -75,7 +77,7 @@ learning_guides = {
     "Yes": {
         "steps": ["Make a fist", "Position in front", "Move up and down"],
         "tips": ["Keep relaxed", "Consistent rhythm", "Clear motion"],
-        "mistakes": ["Too exaggerated", "Hand too low", "Moving whole arm"]
+        "mistakes": ["Too exaggerated", "Hand too low", "Moving entire arm"]
     },
     "No": {
         "steps": ["Form 'V' with fingers", "Palm outward", "Side-to-side motion"],
@@ -90,11 +92,31 @@ class GestureTutorProcessor(VideoProcessorBase):
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=1,
-            min_detection_confidence=0.7,
-            min_tracking_confidence=0.5
+            min_detection_confidence=0.3,
+            min_tracking_confidence=0.3
         )
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
+        self.last_prediction_time = 0
+        self.prediction_cooldown = 1.0
+
+    def generate_feedback(self, prediction, confidence, target_gesture):
+        if prediction is None:
+            return "No hand detected. Please show your hand to the camera."
+        elif prediction != target_gesture:
+            mistakes = learning_guides[target_gesture]["mistakes"]
+            feedback = f"Keep practicing! Here are some tips to improve your '{target_gesture}' sign:\n"
+            for mistake in mistakes:
+                feedback += f"• Avoid {mistake.lower()}\n"
+            return feedback
+        elif confidence < 0.7:
+            tips = learning_guides[target_gesture]["tips"]
+            feedback = "Almost there! Try these tips to improve your confidence:\n"
+            for tip in tips:
+                feedback += f"• {tip}\n"
+            return feedback
+        else:
+            return f"Excellent! You've successfully signed '{target_gesture}' with high confidence!"
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -124,24 +146,31 @@ class GestureTutorProcessor(VideoProcessorBase):
                 y_min = max(0, y_min - padding)
                 y_max = min(h, y_max + padding)
                 
-                if x_min < x_max and y_min < y_max:
-                    hand_img = rgb_frame[y_min:y_max, x_min:x_max]
-                    hand_img = cv2.resize(hand_img, (224, 224))
-                    hand_img = hand_img / 255.0
-                    
-                    try:
-                        pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                        prediction = gesture_classes.get(np.argmax(pred))
-                        confidence = float(np.max(pred))
+                current_time = time.time()
+                if current_time - self.last_prediction_time >= self.prediction_cooldown:
+                    if x_min < x_max and y_min < y_max:
+                        hand_img = rgb_frame[y_min:y_max, x_min:x_max]
+                        hand_img = cv2.resize(hand_img, (224, 224))
+                        hand_img = hand_img / 255.0
                         
-                        st.session_state.current_prediction = prediction
-                        st.session_state.current_confidence = confidence
-                        
-                        label = f"{prediction}: {confidence:.2f}"
-                        cv2.putText(img, label, (x_min, y_min - 10),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-                    except Exception as e:
-                        print(f"Prediction error: {e}")
+                        try:
+                            pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                            prediction = gesture_classes.get(np.argmax(pred))
+                            confidence = float(np.max(pred))
+                            
+                            st.session_state.current_prediction = prediction
+                            st.session_state.current_confidence = confidence
+                            st.session_state.feedback_text = self.generate_feedback(
+                                prediction, confidence, st.session_state.current_gesture
+                            )
+                            
+                            label = f"{prediction}: {confidence:.2f}"
+                            cv2.putText(img, label, (x_min, y_min - 10),
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                            
+                            self.last_prediction_time = current_time
+                        except Exception as e:
+                            print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -152,12 +181,14 @@ class TranscriptionProcessor(VideoProcessorBase):
             static_image_mode=False,
             max_num_hands=1,
             min_detection_confidence=0.3,
-            min_tracking_confidence=0.5
+            min_tracking_confidence=0.3
         )
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.last_prediction_time = 0
         self.prediction_cooldown = 1.0
+        self.current_gesture = None
+        self.last_added_gesture = None
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -199,9 +230,13 @@ class TranscriptionProcessor(VideoProcessorBase):
                             prediction = gesture_classes.get(np.argmax(pred))
                             confidence = float(np.max(pred))
                             
-                            if prediction in ["Hello", "Thank You"] and confidence > 0.3:
-                                st.session_state.transcription_text += f"{prediction} "
-                                self.last_prediction_time = current_time
+                            if prediction and confidence > 0.7:
+                                self.current_gesture = prediction
+                                if (self.current_gesture != self.last_added_gesture or 
+                                    current_time - self.last_prediction_time > 2.0):
+                                    st.session_state.transcription_text += f"{prediction} "
+                                    self.last_added_gesture = prediction
+                                    self.last_prediction_time = current_time
                             
                             label = f"{prediction}: {confidence:.2f}"
                             cv2.putText(img, label, (x_min, y_min - 10),
@@ -268,6 +303,23 @@ if page == "Home":
             """,
             unsafe_allow_html=True
         )
+    
+    st.markdown(
+        """
+        <footer style="text-align: center; margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 10px;">
+            <div style="max-width: 800px; margin: 0 auto;">
+                <p style="color: #0f2f76; font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem;">
+                    Developed by Ivy Fiecas-Borjal
+                </p>
+                <p style="color: #2a4494; font-size: 1rem; margin-bottom: 1rem;">
+                    For the Victoria University - Accessibility AI Hackathon 2024
+                </p>
+                <a href="https://ifiecas.com/" target="_blank" style="display: inline-block; color: white; background-color: #0f2f76; padding: 0.5rem 1.5rem; border-radius: 25px; text-decoration: none;">View Portfolio</a>
+            </div>
+        </footer>
+        """,
+        unsafe_allow_html=True
+    )
 
 elif page == "Sign Language Tutor":
     st.title("🖐️ EduSign - Your Sign Language Tutor")
@@ -282,6 +334,23 @@ elif page == "Sign Language Tutor":
 
         with col1:
             st.markdown("### Learning Guide")
+            
+            # YouTube video with matching size
+            st.markdown(
+                """
+                <div style="width: 100%; padding-bottom: 75%; position: relative;">
+                    <iframe 
+                        src="https://www.youtube.com/embed/Sdw7a-gQzcU"
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
+                        frameborder="0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen>
+                    </iframe>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
             guide = learning_guides.get(selected_gesture, {})
             
             st.markdown("#### Steps:")
@@ -314,6 +383,10 @@ elif page == "Sign Language Tutor":
                     with metric_col2:
                         st.metric("Confidence", 
                                 f"{st.session_state.current_confidence*100:.1f}%" if st.session_state.current_confidence else "N/A")
+                    
+                    st.markdown("### EduSign AI's Feedback:")
+                    if st.session_state.feedback_text:
+                        st.markdown(st.session_state.feedback_text)
 
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
@@ -333,7 +406,7 @@ elif page == "Sign Language to Text":
     </style>
     """, unsafe_allow_html=True)
 
-    st.info("Start signing 'Hello' or 'Thank You' to see real-time transcription.")
+    st.info("Show your signs to the camera. Currently supporting: Hello, Thank You")
 
     col1, col2 = st.columns([1, 1])
 
@@ -348,7 +421,7 @@ elif page == "Sign Language to Text":
     with col2:
         st.markdown("### Transcribed Text")
         st.markdown(
-            f'<div class="transcription-box">{st.session_state.transcription_text or "Waiting for transcription..."}</div>',
+            f'<div class="transcription-box">{st.session_state.transcription_text or "Waiting for signs..."}</div>',
             unsafe_allow_html=True
         )
 
