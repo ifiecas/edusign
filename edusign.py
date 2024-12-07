@@ -131,7 +131,7 @@ class GestureTutorProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks and connections
+                # Always draw lines on the hands
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -174,7 +174,6 @@ class GestureTutorProcessor(VideoProcessorBase):
 
                         color = get_color_for_confidence(confidence)
                         label = f"Detected: {prediction} ({confidence:.1%})"
-
                         (text_width, text_height), _ = cv2.getTextSize(
                             label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
                         cv2.rectangle(img,
@@ -185,6 +184,7 @@ class GestureTutorProcessor(VideoProcessorBase):
                         cv2.putText(img, label, (x_min, y_min - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
                         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
+
                     except Exception as e:
                         print(f"Prediction error: {e}")
         else:
@@ -214,7 +214,7 @@ class TranscriptionProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks and connections
+                # Draw lines on hands
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -248,7 +248,6 @@ class TranscriptionProcessor(VideoProcessorBase):
                     cv2.putText(img, label, (x_min, y_min - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                    # Transcribe immediately if confidence ≥ 20%
                     if confidence >= TRANSCRIPTION_THRESHOLD and prediction is not None:
                         st.session_state.transcription_text += f"{prediction} "
                 except Exception as e:
@@ -256,8 +255,6 @@ class TranscriptionProcessor(VideoProcessorBase):
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-
-# Sidebar Navigation
 st.sidebar.markdown(
     """
     <div style="text-align: center; margin-bottom: 20px;">
@@ -298,7 +295,7 @@ if page == "Home":
         with col:
             st.markdown(
                 f"""
-                <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; height: 100%;">
+                <div style="background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; height: 100%;">
                     <span style="font-size: 2.5rem;">{emoji}</span>
                     <h4 style="color: #0f2f76; margin: 1rem 0;">{title}</h4>
                     <p style="color: #666;">{desc}</p>
@@ -381,17 +378,17 @@ elif page == "Sign Language Tutor":
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
 
-    webrtc_ctx = webrtc_streamer(
-        key="transcription",
-        video_processor_factory=TranscriptionProcessor,
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-        media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False}
-    )
-
+    # Put the video feed on the left and the transcription on the right.
     col1, col2 = st.columns([1, 1])
 
     with col1:
         st.markdown("### Webcam Feed")
+        webrtc_ctx = webrtc_streamer(
+            key="transcription",
+            video_processor_factory=TranscriptionProcessor,
+            rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+            media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False}
+        )
 
     with col2:
         st.markdown("### Transcribed Text")
