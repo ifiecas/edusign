@@ -242,20 +242,16 @@ class GestureTutorProcessor(VideoProcessorBase):
         )
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
-        self.last_prediction_time = 0
-        self.prediction_cooldown = 0.2
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
 
-        # Display "Practicing" text and target gesture
-        cv2.putText(img, f"Target: {st.session_state.current_gesture}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
+        # Always draw hand landmarks
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
+                # Draw hand landmarks with connections
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -264,6 +260,7 @@ class GestureTutorProcessor(VideoProcessorBase):
                     self.mp_drawing_styles.get_default_hand_connections_style()
                 )
 
+                # Get hand region
                 h, w, _ = img.shape
                 x_coords = [lm.x * w for lm in hand_landmarks.landmark]
                 y_coords = [lm.y * h for lm in hand_landmarks.landmark]
@@ -274,48 +271,45 @@ class GestureTutorProcessor(VideoProcessorBase):
                 x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
                 y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
 
-                if x_min < x_max and y_min < y_max:
-                    hand_img = rgb_frame[y_min:y_max, x_min:x_max]
-                    hand_img = cv2.resize(hand_img, (224, 224))
-                    hand_img = hand_img / 255.0
+                # Process hand image for gesture recognition
+                hand_img = rgb_frame[y_min:y_max, x_min:x_max]
+                hand_img = cv2.resize(hand_img, (224, 224))
+                hand_img = hand_img / 255.0
 
-                    try:
-                        # Make prediction
-                        pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                        prediction = gesture_classes.get(np.argmax(pred))
-                        confidence = float(np.max(pred))
+                try:
+                    # Make prediction
+                    pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                    prediction = gesture_classes.get(np.argmax(pred))
+                    confidence = float(np.max(pred))
+                    
+                    # Update session state for UI feedback
+                    st.session_state.current_prediction = prediction
+                    st.session_state.current_confidence = confidence
 
-                        # Update states
-                        st.session_state.current_prediction = prediction
-                        st.session_state.current_confidence = confidence
+                    # Generate real-time feedback
+                    target_gesture = st.session_state.current_gesture
+                    if confidence <= 0.3:
+                        st.session_state.feedback_text = (
+                            f"Try to improve your {target_gesture} sign. Common mistakes:\n" +
+                            "\n".join([f"• {m}" for m in learning_guides[target_gesture]["mistakes"]])
+                        )
+                    elif prediction != target_gesture:
+                        st.session_state.feedback_text = (
+                            f"You're showing '{prediction}' instead of '{target_gesture}'. Follow these steps:\n" +
+                            "\n".join([f"• {s}" for s in learning_guides[target_gesture]["steps"]])
+                        )
+                    else:
+                        st.session_state.feedback_text = f"Perfect! You're correctly showing '{target_gesture}'!"
 
-                        # Generate feedback based on prediction
-                        target_gesture = st.session_state.current_gesture
-                        if confidence <= 0.3:
-                            feedback = f"Your '{prediction}' sign needs improvement. Remember:\n"
-                            for mistake in learning_guides[target_gesture]["mistakes"]:
-                                feedback += f"• Avoid: {mistake}\n"
-                        elif prediction != target_gesture:
-                            feedback = f"You're showing '{prediction}' instead of '{target_gesture}'. Try these steps:\n"
-                            for step in learning_guides[target_gesture]["steps"]:
-                                feedback += f"• {step}\n"
-                        else:
-                            feedback = f"Great job! Perfect '{target_gesture}' sign!"
-                        
-                        st.session_state.feedback_text = feedback
+                    # Draw prediction on frame
+                    label = f"Detected: {prediction} ({confidence:.1%})"
+                    cv2.putText(img, label, (x_min, y_min - 10),
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                        # Draw on frame
-                        color = (0, 255, 0) if prediction == target_gesture else (0, 0, 255)
-                        cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
-                        label = f"Detected: {prediction} ({confidence:.1%})"
-                        cv2.putText(img, label, (x_min, y_min - 10),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-
-                    except Exception as e:
-                        print(f"Prediction error: {e}")
+                except Exception as e:
+                    print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
-
 
 class TranscriptionProcessor(VideoProcessorBase):
     def __init__(self):
@@ -328,8 +322,9 @@ class TranscriptionProcessor(VideoProcessorBase):
         )
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
+        self.last_prediction = None
         self.last_prediction_time = 0
-        self.prediction_cooldown = 1.0  # Longer cooldown for smoother transcription
+        self.cooldown = 1.0  # 1 second cooldown between predictions
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -338,8 +333,10 @@ class TranscriptionProcessor(VideoProcessorBase):
         
         current_time = time.time()
 
+        # Always draw hand landmarks
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
+                # Draw hand landmarks with connections
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -348,6 +345,7 @@ class TranscriptionProcessor(VideoProcessorBase):
                     self.mp_drawing_styles.get_default_hand_connections_style()
                 )
 
+                # Process hand for transcription
                 h, w, _ = img.shape
                 x_coords = [lm.x * w for lm in hand_landmarks.landmark]
                 y_coords = [lm.y * h for lm in hand_landmarks.landmark]
@@ -358,33 +356,33 @@ class TranscriptionProcessor(VideoProcessorBase):
                 x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
                 y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
 
-                if current_time - self.last_prediction_time >= self.prediction_cooldown:
-                    if x_min < x_max and y_min < y_max:
-                        hand_img = rgb_frame[y_min:y_max, x_min:x_max]
-                        hand_img = cv2.resize(hand_img, (224, 224))
-                        hand_img = hand_img / 255.0
+                # Only process new predictions after cooldown
+                if current_time - self.last_prediction_time >= self.cooldown:
+                    hand_img = rgb_frame[y_min:y_max, x_min:x_max]
+                    hand_img = cv2.resize(hand_img, (224, 224))
+                    hand_img = hand_img / 255.0
 
-                        try:
-                            pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                            prediction = gesture_classes.get(np.argmax(pred))
-                            confidence = float(np.max(pred))
+                    try:
+                        pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                        prediction = gesture_classes.get(np.argmax(pred))
+                        confidence = float(np.max(pred))
 
-                            if confidence > 0.3:  # Lower threshold for demo
-                                # Add to transcription
-                                st.session_state.transcription_text += f"{prediction} "
-                                self.last_prediction_time = current_time
+                        # Show current detection on video
+                        label = f"{prediction}: {confidence:.1%}"
+                        cv2.putText(img, label, (x_min, y_min - 10),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                            # Display on frame
-                            color = (0, 255, 0) if confidence > 0.3 else (0, 0, 255)
-                            cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
-                            label = f"{prediction}: {confidence:.1%}"
-                            cv2.putText(img, label, (x_min, y_min - 10),
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                        # Add to transcription if confidence is good and it's a new gesture
+                        if confidence > 0.3 and prediction != self.last_prediction:
+                            st.session_state.transcription_text += f"{prediction} "
+                            self.last_prediction = prediction
+                            self.last_prediction_time = current_time
 
-                        except Exception as e:
-                            print(f"Prediction error: {e}")
+                    except Exception as e:
+                        print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
+
 
 
 # Page Implementations
