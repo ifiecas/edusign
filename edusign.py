@@ -13,29 +13,41 @@ import time
 # Page Configuration
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
 
-# Initialize ALL session states upfront
-session_state_vars = {
-    'transcription_text': "",
-    'usage_count': 0,
-    'user_level': "Beginner",
-    'current_prediction': None,
-    'current_confidence': None,
-    'feedback_text': "",
-    'real_time_gesture': "",
-    'real_time_confidence': None,
-    'last_detection_time': time.time(),
-    'target_gesture': None,
-    'debug_mode': False
-}
+############################################
+# Initialize Session State Variables
+############################################
+if 'transcription_text' not in st.session_state:
+    st.session_state.transcription_text = ""
+if 'usage_count' not in st.session_state:
+    st.session_state.usage_count = 0
+if 'user_level' not in st.session_state:
+    st.session_state.user_level = "Beginner"
+if 'current_prediction' not in st.session_state:
+    st.session_state.current_prediction = None
+if 'current_confidence' not in st.session_state:
+    st.session_state.current_confidence = None
+if 'feedback_text' not in st.session_state:
+    st.session_state.feedback_text = ""
+if 'last_transcribed_gesture' not in st.session_state:
+    st.session_state.last_transcribed_gesture = None
+if 'real_time_gesture' not in st.session_state:
+    st.session_state.real_time_gesture = ""
+if 'real_time_confidence' not in st.session_state:
+    st.session_state.real_time_confidence = None
+if 'last_detection_time' not in st.session_state:
+    st.session_state.last_detection_time = time.time()
+if 'target_gesture' not in st.session_state:
+    st.session_state.target_gesture = None
+if 'debug_mode' not in st.session_state:
+    st.session_state.debug_mode = False
 
-for var_name, default_value in session_state_vars.items():
-    if var_name not in st.session_state:
-        st.session_state[var_name] = default_value
-
-# Constants
-CONFIDENCE_THRESHOLD = 0.30  # Show green feedback above this threshold
-MIN_CONFIDENCE = 0.20        # Show all gestures above this for any feedback
+############################################
+# Constants and Configuration
+############################################
+CONFIDENCE_THRESHOLD = 0.30
+MIN_CONFIDENCE = 0.20
 TRANSCRIPTION_THRESHOLD = 0.30
+DISPLAY_THRESHOLD = 0.20
 
 # Sidebar Navigation
 st.sidebar.markdown(
@@ -70,7 +82,7 @@ def load_model():
         st.error(f"Failed to load model: {e}")
         return None, False
 
-# Load model and setup
+# Load model
 gesture_model, model_loaded = load_model()
 
 # Gesture Classes
@@ -219,7 +231,7 @@ class GestureTutorProcessor(VideoProcessorBase):
                     except Exception as e:
                         print(f"Prediction error: {e}")
         else:
-            # If no hand detected
+            # No hand detected
             st.session_state.current_prediction = None
             st.session_state.current_confidence = None
             st.session_state.feedback_text = "No hand detected. Please show your hand to the camera."
@@ -240,7 +252,7 @@ class TranscriptionProcessor(VideoProcessorBase):
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.last_prediction = None
         self.last_prediction_time = 0
-        self.cooldown = 1.0  # 1 second cooldown between new predictions
+        self.cooldown = 1.0  # 1 second cooldown
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -251,7 +263,7 @@ class TranscriptionProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks with lines
+                # Draw landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -413,7 +425,6 @@ elif page == "Sign Language Tutor":
                         elif "No hand detected" in feedback:
                             st.info(feedback)
                         else:
-                            # If no specific keywords, default to warning
                             st.warning(feedback)
                     else:
                         st.info("Show your hand to get feedback")
