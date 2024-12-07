@@ -479,16 +479,19 @@ elif page == "Connect to a Mentor":
     )
 
     level_mentors = mentors.get(user_level, {})
-    
-    # Recommend a mentor based on user's learning level
-    # For simplicity, pick the first mentor in the dictionary as the recommended one
+
+    # Pick the first mentor as the recommended mentor for this level
     recommended_mentor = next(iter(level_mentors.keys()))
     recommended_mentor_description = level_mentors.get(recommended_mentor, "")
 
+    # Mentor image URL
+    mentor_image_url = "https://i.ibb.co/v1q7zgS/1.jpg"  # Provided image link
+
     st.markdown(
         f"""
-        <div style="background-color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <div style="background-color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
             <h3 style="color: #0f2f76;">Recommended Mentor for Your Level</h3>
+            <img src="{mentor_image_url}" alt="Recommended Mentor" style="width: 150px; height: auto; border-radius: 50%; margin: 20px 0;">
             <p style="font-size: 1.1rem;">
                 Based on your current learning path <span style="color: #0f2f76; font-weight: 600;">({user_level})</span>,
                 we recommend connecting with <span style="color: #0f2f76; font-weight: 600;">{recommended_mentor}</span>.
@@ -499,19 +502,22 @@ elif page == "Connect to a Mentor":
         unsafe_allow_html=True
     )
 
-    # User can still choose a different mentor if desired
-    selected_mentor = st.selectbox("Choose your mentor:", list(level_mentors.keys()), index=0)
+    # User can choose a mentor (the recommended one is default in the list)
+    mentor_list = list(level_mentors.keys())
+    default_index = mentor_list.index(recommended_mentor)
+    selected_mentor = st.selectbox("Choose your mentor:", mentor_list, index=default_index)
 
-    # Use a calendar input for selecting the date
+    # Calendar input for selecting date
     preferred_date = st.date_input("Select Preferred Date:")
 
-    # Time selection from a dropdown
+    # Dropdown for selecting time
     preferred_time = st.selectbox("Select Preferred Time:", ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"])
 
     if st.button("Schedule Session"):
-        st.session_state["usage_count"] = st.session_state.get("usage_count", 0) + 1
+        st.session_state["usage_count"] = st.session_state.get("usage_count",0) + 1
         st.success(f"✅ Session scheduled with {selected_mentor} on {preferred_date} at {preferred_time}")
         st.balloons()
+
 
 
 # Add a universal footer for all pages
