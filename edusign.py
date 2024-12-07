@@ -329,8 +329,14 @@ elif page == "Sign Language Tutor":
     if not model_loaded:
         st.error("Model failed to load. Please check the URL and restart the application.")
     else:
-        selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
-        st.session_state["target_gesture"] = selected_gesture
+        col_left, col_right = st.columns(2)
+
+        with col_left:
+            selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
+            st.session_state["target_gesture"] = selected_gesture
+
+        with col_right:
+            st.markdown("**Disclaimer:** The prototype model is currently optimized for **'Hello'**. Please wave **'Hello'**!")
 
         col1, col2 = st.columns(2)
 
@@ -348,8 +354,8 @@ elif page == "Sign Language Tutor":
                 </div>
                 """, unsafe_allow_html=True)
             
-            guide = learning_guides.get(selected_gesture, {})
-            st.markdown(f"#### Steps for '{selected_gesture}':")
+            guide = learning_guides.get(st.session_state["target_gesture"], {})
+            st.markdown(f"#### Steps for '{st.session_state['target_gesture']}':")
             for step in guide.get("steps", []):
                 st.markdown(f"- {step}")
 
@@ -389,6 +395,7 @@ elif page == "Sign Language Tutor":
                         st.warning(feedback)
                 else:
                     st.info("Show your hand to get feedback")
+
 
 elif page == "Sign Language to Text":
     st.title("🖐️ Gesture Translator | Converting Sign Language to Text")
