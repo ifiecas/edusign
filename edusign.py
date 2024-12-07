@@ -18,16 +18,14 @@ session_state_vars = {
     'transcription_text': "",
     'usage_count': 0,
     'user_level': "Beginner",
-    'current_gesture': None,
     'current_prediction': None,
     'current_confidence': None,
     'feedback_text': "",
-    'last_transcribed_gesture': None,
     'real_time_gesture': "",
     'real_time_confidence': None,
     'last_detection_time': time.time(),
     'target_gesture': None,
-    'debug_mode': False  # Ensure debug_mode is initialized
+    'debug_mode': False
 }
 
 for var_name, default_value in session_state_vars.items():
@@ -35,10 +33,9 @@ for var_name, default_value in session_state_vars.items():
         st.session_state[var_name] = default_value
 
 # Constants
-CONFIDENCE_THRESHOLD = 0.30  # Show gestures at 30% confidence
-MIN_CONFIDENCE = 0.20        # Show all gestures above 20%
-TRANSCRIPTION_THRESHOLD = 0.30  # Add to transcription at 30%
-DISPLAY_THRESHOLD = 0.20        # Show detection feedback at 20%
+CONFIDENCE_THRESHOLD = 0.30  # Show green feedback above this threshold
+MIN_CONFIDENCE = 0.20        # Show all gestures above this for any feedback
+TRANSCRIPTION_THRESHOLD = 0.30
 
 # Sidebar Navigation
 st.sidebar.markdown(
@@ -153,8 +150,6 @@ class GestureTutorProcessor(VideoProcessorBase):
         )
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
-        self.last_prediction_time = time.time()
-        self.prediction_cooldown = 0.2
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -167,7 +162,7 @@ class GestureTutorProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks
+                # Draw hand landmarks with lines
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -205,13 +200,11 @@ class GestureTutorProcessor(VideoProcessorBase):
                         feedback_text, feedback_type = generate_feedback(prediction, confidence, st.session_state.target_gesture)
                         st.session_state.feedback_text = feedback_text
 
-                        # Choose box color based on accuracy
-                        color = (0, 255, 0) if (prediction == target_gesture and confidence > CONFIDENCE_THRESHOLD) else (0, 0, 255)
+                        color = get_color_for_confidence(confidence)
 
                         # Draw bounding box
                         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
 
-                        # Draw label
                         label = f"Detected: {prediction} ({confidence:.1%})"
                         (text_width, text_height), _ = cv2.getTextSize(
                             label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
@@ -225,6 +218,11 @@ class GestureTutorProcessor(VideoProcessorBase):
 
                     except Exception as e:
                         print(f"Prediction error: {e}")
+        else:
+            # If no hand detected
+            st.session_state.current_prediction = None
+            st.session_state.current_confidence = None
+            st.session_state.feedback_text = "No hand detected. Please show your hand to the camera."
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -242,7 +240,7 @@ class TranscriptionProcessor(VideoProcessorBase):
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.last_prediction = None
         self.last_prediction_time = 0
-        self.cooldown = 1.0  # 1 second cooldown
+        self.cooldown = 1.0  # 1 second cooldown between new predictions
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
@@ -253,7 +251,7 @@ class TranscriptionProcessor(VideoProcessorBase):
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw landmarks
+                # Draw hand landmarks with lines
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -272,6 +270,7 @@ class TranscriptionProcessor(VideoProcessorBase):
                 x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
                 y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
 
+                # Only process new predictions after cooldown
                 if current_time - self.last_prediction_time >= self.cooldown:
                     hand_img = rgb_frame[y_min:y_max, x_min:x_max]
                     hand_img = cv2.resize(hand_img, (224, 224))
@@ -282,11 +281,16 @@ class TranscriptionProcessor(VideoProcessorBase):
                         prediction = gesture_classes.get(np.argmax(pred))
                         confidence = float(np.max(pred))
 
+                        # Show current detection on video
                         label = f"{prediction}: {confidence:.1%}"
                         cv2.putText(img, label, (x_min, y_min - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                        # Add to transcription if confident and a new gesture
+                        # Update real-time gesture info
+                        st.session_state.real_time_gesture = prediction
+                        st.session_state.real_time_confidence = confidence
+
+                        # Add to transcription if confidence is good and it's a new gesture
                         if confidence > TRANSCRIPTION_THRESHOLD and prediction != self.last_prediction:
                             st.session_state.transcription_text += f"{prediction} "
                             self.last_prediction = prediction
@@ -294,6 +298,10 @@ class TranscriptionProcessor(VideoProcessorBase):
 
                     except Exception as e:
                         print(f"Prediction error: {e}")
+        else:
+            # If no hand detected in this frame
+            st.session_state.real_time_gesture = ""
+            st.session_state.real_time_confidence = None
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -381,31 +389,31 @@ elif page == "Sign Language Tutor":
             if webrtc_ctx.state.playing:
                 detection_container = st.container()
                 with detection_container:
+                    # Current Detection
                     st.markdown("### Current Detection")
                     cols = st.columns([1, 1])
                     with cols[0]:
-                        st.metric(
-                            "Detected Gesture",
-                            st.session_state.current_prediction if st.session_state.current_prediction else "None"
-                        )
+                        detected_gesture = st.session_state.current_prediction if st.session_state.current_prediction else "None"
+                        st.metric("Detected Gesture", detected_gesture)
                     with cols[1]:
                         confidence = st.session_state.current_confidence
                         if confidence is not None:
-                            color = "red" if confidence <= CONFIDENCE_THRESHOLD else "green"
+                            color = "red" if confidence < CONFIDENCE_THRESHOLD else "green"
                             st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>', 
                                         unsafe_allow_html=True)
 
+                    # Feedback
                     st.markdown("### EduSign AI's Feedback")
                     feedback = st.session_state.feedback_text
                     if feedback:
                         if "Great job" in feedback:
                             st.success(feedback)
-                        elif "Getting better" in feedback:
+                        elif "Getting better" in feedback or "Trying to learn" in feedback:
                             st.warning(feedback)
                         elif "No hand detected" in feedback:
                             st.info(feedback)
                         else:
-                            # Default to warning if no clear cue
+                            # If no specific keywords, default to warning
                             st.warning(feedback)
                     else:
                         st.info("Show your hand to get feedback")
