@@ -326,6 +326,10 @@ if page == "Home":
 elif page == "Sign Language Tutor":
     st.title("🖐️ EduSign - Your Sign Language Tutor")
 
+    # Add two descriptive sentences under the title
+    st.write("EduSign leverages advanced AI to guide you through sign language gestures, one step at a time. \
+              Experience immersive learning, real-time feedback, and personalized tips to elevate your signing skills.")
+
     if not model_loaded:
         st.error("Model failed to load. Please check the URL and restart the application.")
     else:
@@ -336,7 +340,15 @@ elif page == "Sign Language Tutor":
             st.session_state["target_gesture"] = selected_gesture
 
         with col_right:
-            st.markdown("**Disclaimer:** The prototype model is currently optimized for **'Hello'**. Please wave **'Hello'**!")
+            st.markdown("""
+            <div style="background-color: #fff3cd; padding: 20px; border-radius: 5px;">
+                <h2 style="color: #856404; margin-top: 0; font-size:1.5rem;">⚠️ Disclaimer</h2>
+                <p style="font-size:1.2rem; color:#856404; margin:0;">
+                    The prototype model is currently optimized for <strong>'Hello'</strong>. 
+                    Please wave <strong>'Hello'</strong>!
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
         col1, col2 = st.columns(2)
 
