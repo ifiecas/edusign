@@ -295,7 +295,7 @@ if page == "Home":
         
         <div style="text-align: center; background-color: #f8f9fa; padding: 2.5rem 0; border-radius: 10px;">
             <h2 style="color: #0f2f76; font-size: 1.8rem; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 0 20px;">
-                EduSign AI is an innovative educational platform that leverages artificial intelligence to transform how students learn and engage with sign language education, making communication more accessible and interactive. 
+                EduSign AI is an innovative educational platform that uses artificial intelligence to make sign language learning interactive and accessible. 
             </h2>
         </div>
         """,
@@ -523,7 +523,7 @@ st.markdown(
                 Developed by Ivy Fiecas-Borjal
             </p>
             <p style="color: #2a4494; font-size: 1rem; margin-bottom: 1rem;">
-                For the Victoria University - Accessibility AI Hackathon 2024
+                A Prototype Submission | Victoria University - Accessibility AI Hackathon 2024
             </p>
             <a href="https://ifiecas.com/" target="_blank" style="display: inline-block; color: white; background-color: #0f2f76; padding: 0.5rem 1.5rem; border-radius: 25px; text-decoration: none;">View Portfolio</a>
         </div>
