@@ -295,8 +295,7 @@ if page == "Home":
         
         <div style="text-align: center; background-color: #f8f9fa; padding: 2.5rem 0; border-radius: 10px;">
             <h2 style="color: #0f2f76; font-size: 1.8rem; line-height: 1.5; margin: 0 auto; max-width: 800px; padding: 0 20px;">
-                EduSign AI is an innovative educational platform developed in partnership with 
-                <span style="color: #0f2f76; font-weight: 700;">Victoria University</span>.
+                EduSign AI is an innovative educational platform that leverages artificial intelligence to transform how students learn and engage with sign language education, making communication more accessible and interactive. 
             </h2>
         </div>
         """,
