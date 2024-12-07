@@ -171,11 +171,12 @@ class GestureTutorProcessor(VideoProcessorBase):
                         prediction = gesture_classes.get(np.argmax(pred))
                         confidence = float(np.max(pred))
 
+                        # Update session state with the current detection
                         st.session_state["current_prediction"] = prediction
                         st.session_state["current_confidence"] = confidence
 
                         feedback_text, feedback_type = generate_feedback(
-                            prediction, confidence, st.session_state.get("target_gesture", "None")
+                            prediction, confidence, target_gesture
                         )
                         st.session_state["feedback_text"] = feedback_text
 
@@ -263,6 +264,7 @@ class TranscriptionProcessor(VideoProcessorBase):
                         st.session_state["real_time_gesture"] = prediction
                         st.session_state["real_time_confidence"] = confidence
 
+                        # Add recognized gesture to transcription if conditions met
                         if confidence > TRANSCRIPTION_THRESHOLD and prediction != self.last_prediction:
                             st.session_state["transcription_text"] += f"{prediction} "
                             self.last_prediction = prediction
@@ -333,7 +335,6 @@ elif page == "Sign Language Tutor":
     if not model_loaded:
         st.error("Model failed to load. Please check the URL and restart the application.")
     else:
-        # When user selects a gesture, it updates session_state "target_gesture"
         selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
         st.session_state["target_gesture"] = selected_gesture
 
@@ -370,10 +371,12 @@ elif page == "Sign Language Tutor":
             if webrtc_ctx.state.playing:
                 detection_container = st.container()
                 with detection_container:
+                    # Current Detection
                     st.markdown("### Current Detection")
                     cols = st.columns([1, 1])
                     with cols[0]:
-                        detected_gesture = st.session_state.get("current_prediction", "None")
+                        # Show just the gesture text in "Detected Gesture"
+                        detected_gesture = st.session_state.get("current_prediction", "None") or "None"
                         st.metric("Detected Gesture", detected_gesture)
                     with cols[1]:
                         confidence = st.session_state.get("current_confidence", None)
@@ -382,6 +385,7 @@ elif page == "Sign Language Tutor":
                             st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>', 
                                         unsafe_allow_html=True)
 
+                    # Feedback
                     st.markdown("### EduSign AI's Feedback")
                     feedback = st.session_state.get("feedback_text", "")
                     if feedback:
@@ -433,6 +437,7 @@ elif page == "Sign Language to Text":
 
     with col2:
         st.markdown("### Transcribed Text")
+        # The text here updates as new gestures are recognized confidently
         transcription = st.session_state.get("transcription_text", "Waiting for signs...")
         st.markdown(
             f'<div class="transcription-box">{transcription}</div>',
