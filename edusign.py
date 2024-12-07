@@ -13,29 +13,26 @@ import time
 # Page Configuration
 st.set_page_config(page_title="EduSign@VU: Sign Language for All", layout="wide", page_icon="🖐️")
 
-# Initialize session states
-if 'transcription_text' not in st.session_state:
-    st.session_state.transcription_text = ""
-if 'usage_count' not in st.session_state:
-    st.session_state.usage_count = 0
-if 'user_level' not in st.session_state:
-    st.session_state.user_level = "Beginner"
-if 'current_gesture' not in st.session_state:
-    st.session_state.current_gesture = None
-if 'current_prediction' not in st.session_state:
-    st.session_state.current_prediction = None
-if 'current_confidence' not in st.session_state:
-    st.session_state.current_confidence = None
-if 'feedback_text' not in st.session_state:
-    st.session_state.feedback_text = ""
-if 'last_transcribed_gesture' not in st.session_state:
-    st.session_state.last_transcribed_gesture = None
-if 'real_time_gesture' not in st.session_state:
-    st.session_state.real_time_gesture = ""
-if 'real_time_confidence' not in st.session_state:
-    st.session_state.real_time_confidence = None
-if 'debug_mode' not in st.session_state:
-    st.session_state.debug_mode = True
+# Initialize ALL session states upfront
+session_state_vars = {
+    'transcription_text': "",
+    'usage_count': 0,
+    'user_level': "Beginner",
+    'current_gesture': None,
+    'current_prediction': None,
+    'current_confidence': None,
+    'feedback_text': "",
+    'last_transcribed_gesture': None,
+    'real_time_gesture': "",
+    'real_time_confidence': None,
+    'last_detection_time': time.time(),
+    'target_gesture': None,
+}
+
+# Initialize all session states
+for var_name, default_value in session_state_vars.items():
+    if var_name not in st.session_state:
+        st.session_state[var_name] = default_value
 
 # Constants
 CONFIDENCE_THRESHOLD = 0.30  # Show gestures at 30% confidence
@@ -54,6 +51,7 @@ st.sidebar.markdown(
     unsafe_allow_html=True
 )
 page = st.sidebar.radio("Choose your learning path:", ["Home", "Sign Language Tutor", "Sign Language to Text", "Connect to a Mentor"])
+
 
 @st.cache_resource
 def load_model():
@@ -242,16 +240,24 @@ class GestureTutorProcessor(VideoProcessorBase):
         )
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
+        self.last_prediction_time = time.time()
+        self.prediction_cooldown = 0.2
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
 
-        # Always draw hand landmarks
+        # Display target gesture
+        target_gesture = st.session_state.target_gesture or "None"
+        cv2.putText(img, f"Target: {target_gesture}", (10, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+
+        current_time = time.time()
+
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks with connections
+                # Draw hand landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -268,46 +274,67 @@ class GestureTutorProcessor(VideoProcessorBase):
                 x_min, x_max = map(int, [min(x_coords), max(x_coords)])
                 y_min, y_max = map(int, [min(y_coords), max(y_coords)])
                 padding = 20
-                x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
-                y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
+                x_min = max(0, x_min - padding)
+                x_max = min(w, x_max + padding)
+                y_min = max(0, y_min - padding)
+                y_max = min(h, y_max + padding)
 
-                # Process hand image for gesture recognition
-                hand_img = rgb_frame[y_min:y_max, x_min:x_max]
-                hand_img = cv2.resize(hand_img, (224, 224))
-                hand_img = hand_img / 255.0
+                # Process hand for gesture recognition
+                if x_min < x_max and y_min < y_max:
+                    hand_img = rgb_frame[y_min:y_max, x_min:x_max]
+                    hand_img = cv2.resize(hand_img, (224, 224))
+                    hand_img = hand_img / 255.0
 
-                try:
-                    # Make prediction
-                    pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                    prediction = gesture_classes.get(np.argmax(pred))
-                    confidence = float(np.max(pred))
-                    
-                    # Update session state for UI feedback
-                    st.session_state.current_prediction = prediction
-                    st.session_state.current_confidence = confidence
+                    try:
+                        # Make prediction
+                        pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
+                        prediction = gesture_classes.get(np.argmax(pred))
+                        confidence = float(np.max(pred))
 
-                    # Generate real-time feedback
-                    target_gesture = st.session_state.current_gesture
-                    if confidence <= 0.3:
-                        st.session_state.feedback_text = (
-                            f"Try to improve your {target_gesture} sign. Common mistakes:\n" +
-                            "\n".join([f"• {m}" for m in learning_guides[target_gesture]["mistakes"]])
-                        )
-                    elif prediction != target_gesture:
-                        st.session_state.feedback_text = (
-                            f"You're showing '{prediction}' instead of '{target_gesture}'. Follow these steps:\n" +
-                            "\n".join([f"• {s}" for s in learning_guides[target_gesture]["steps"]])
-                        )
-                    else:
-                        st.session_state.feedback_text = f"Perfect! You're correctly showing '{target_gesture}'!"
+                        # Update session states for UI
+                        st.session_state.current_prediction = prediction
+                        st.session_state.current_confidence = confidence
 
-                    # Draw prediction on frame
-                    label = f"Detected: {prediction} ({confidence:.1%})"
-                    cv2.putText(img, label, (x_min, y_min - 10),
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                        # Generate feedback based on prediction and confidence
+                        if confidence <= 0.3:
+                            st.session_state.feedback_text = (
+                                f"Keep practicing! Tips for '{target_gesture}':\n" +
+                                "\n".join([f"• {tip}" for tip in learning_guides[target_gesture]["tips"]]) +
+                                "\n\nCommon mistakes to avoid:\n" +
+                                "\n".join([f"• {mistake}" for mistake in learning_guides[target_gesture]["mistakes"]])
+                            )
+                        elif prediction != target_gesture:
+                            st.session_state.feedback_text = (
+                                f"You're showing '{prediction}' but trying to learn '{target_gesture}'.\n\n" +
+                                "Follow these steps:\n" +
+                                "\n".join([f"• {step}" for step in learning_guides[target_gesture]["steps"]])
+                            )
+                        else:
+                            st.session_state.feedback_text = (
+                                f"Excellent! Perfect '{target_gesture}' sign! ({confidence:.1%})\n\n" +
+                                "Keep practicing to maintain this level!"
+                            )
 
-                except Exception as e:
-                    print(f"Prediction error: {e}")
+                        # Draw detection results on frame
+                        color = (0, 255, 0) if prediction == target_gesture and confidence > 0.3 else (0, 0, 255)
+                        
+                        # Draw bounding box
+                        cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
+                        
+                        # Draw detection text with background
+                        label = f"Detected: {prediction} ({confidence:.1%})"
+                        (text_width, text_height), _ = cv2.getTextSize(
+                            label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+                        cv2.rectangle(img, 
+                                    (x_min, y_min - text_height - 10),
+                                    (x_min + text_width, y_min),
+                                    (255, 255, 255),
+                                    -1)
+                        cv2.putText(img, label, (x_min, y_min - 10),
+                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+
+                    except Exception as e:
+                        print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -432,7 +459,7 @@ elif page == "Sign Language Tutor":
         st.error("Model failed to load. Please check the URL and restart the application.")
     else:
         selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
-        st.session_state.current_gesture = selected_gesture
+        st.session_state.target_gesture = selected_gesture  # Update this instead of current_gesture
 
         col1, col2 = st.columns(2)
 
