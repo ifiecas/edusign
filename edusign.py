@@ -72,6 +72,13 @@ def load_model():
 # Load model and setup
 gesture_model, model_loaded = load_model()
 
+# Add debug print after model loading
+gesture_model, model_loaded = load_model()
+if model_loaded:
+    print("Model loaded successfully!")
+else:
+    print("Model failed to load!")
+
 # Gesture Classes
 gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}
 
@@ -137,98 +144,67 @@ def generate_feedback(prediction, confidence, target_gesture):
             return feedback, "success"
 
 
-class GestureTutorProcessor(VideoProcessorBase):
-    def __init__(self):
-        self.mp_hands = mp.solutions.hands
-        self.hands = self.mp_hands.Hands(
-            static_image_mode=False,
-            max_num_hands=1,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
-        self.mp_draw = mp.solutions.drawing_utils
-        self.mp_drawing_styles = mp.solutions.drawing_styles
-        self.last_prediction_time = 0
-        self.prediction_cooldown = 0.2  # Faster updates for better responsiveness
+elif page == "Sign Language Tutor":
+    st.title("🖐️ EduSign - Your Sign Language Tutor")
 
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.hands.process(rgb_frame)
+    if not model_loaded:
+        st.error("Model failed to load. Please check the URL and restart the application.")
+    else:
+        selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
+        st.session_state.current_gesture = selected_gesture
 
-        current_time = time.time()
-        frame_height, frame_width = img.shape[:2]
+        col1, col2 = st.columns(2)
 
-        # Add gesture area indicator
-        cv2.putText(img, "Gesture Detection Area", (10, 30), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        with col1:
+            st.markdown("### Learning Guide")
+            
+            # YouTube video
+            st.markdown("""
+                <div style="width: 100%; padding-bottom: 75%; position: relative;">
+                    <iframe 
+                        src="https://www.youtube.com/embed/Sdw7a-gQzcU"
+                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
+                        frameborder="0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowfullscreen>
+                    </iframe>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            guide = learning_guides.get(selected_gesture, {})
+            st.markdown(f"#### Steps for '{selected_gesture}':")
+            for step in guide.get("steps", []):
+                st.markdown(f"- {step}")
 
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks
-                self.mp_draw.draw_landmarks(
-                    img,
-                    hand_landmarks,
-                    self.mp_hands.HAND_CONNECTIONS,
-                    self.mp_drawing_styles.get_default_hand_landmarks_style(),
-                    self.mp_drawing_styles.get_default_hand_connections_style()
-                )
+        with col2:
+            st.markdown("### Practice Area")
+            webrtc_ctx = webrtc_streamer(
+                key="gesture-tutor",
+                video_processor_factory=GestureTutorProcessor,
+                rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+                media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False}
+            )
 
-                h, w, _ = img.shape
-                x_coords = [lm.x * w for lm in hand_landmarks.landmark]
-                y_coords = [lm.y * h for lm in hand_landmarks.landmark]
-                
-                x_min, x_max = map(int, [min(x_coords), max(x_coords)])
-                y_min, y_max = map(int, [min(y_coords), max(y_coords)])
-                
-                padding = 20
-                x_min = max(0, x_min - padding)
-                x_max = min(w, x_max + padding)
-                y_min = max(0, y_min - padding)
-                y_max = min(h, y_max + padding)
-                
-                if current_time - self.last_prediction_time >= self.prediction_cooldown:
-                    if x_min < x_max and y_min < y_max:
-                        hand_img = rgb_frame[y_min:y_max, x_min:x_max]
-                        hand_img = cv2.resize(hand_img, (224, 224))
-                        hand_img = hand_img / 255.0
-                        
-                        try:
-                            pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
-                            prediction = gesture_classes.get(np.argmax(pred))
-                            confidence = float(np.max(pred))
-                            
-                            # Update session states
-                            st.session_state.current_prediction = prediction
-                            st.session_state.current_confidence = confidence
-                            
-                            # Generate feedback
-                            feedback, _ = generate_feedback(
-                                prediction, confidence, st.session_state.current_gesture
-                            )
-                            st.session_state.feedback_text = feedback
-                            
-                            # Display detection on frame
-                            color = get_color_for_confidence(confidence)
-                            
-                            # Draw detection box
-                            cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
-                            
-                            # Display gesture and confidence
-                            gesture_text = f"Detected: {prediction}"
-                            conf_text = f"Confidence: {confidence:.1%}"
-                            
-                            # Position text above the detection box
-                            cv2.putText(img, gesture_text, (x_min, y_min - 30),
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-                            cv2.putText(img, conf_text, (x_min, y_min - 10),
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-                            
-                            self.last_prediction_time = current_time
-                        except Exception as e:
-                            print(f"Prediction error: {e}")
+            # Display current detection and feedback
+            if webrtc_ctx.state.playing:
+                st.markdown("### Current Detection")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.session_state.current_prediction:
+                        st.markdown(f"**Detected Gesture:** {st.session_state.current_prediction}")
+                with col2:
+                    if st.session_state.current_confidence:
+                        confidence = st.session_state.current_confidence
+                        color = "green" if confidence > CONFIDENCE_THRESHOLD else "red"
+                        st.markdown(f"**Confidence:** <span style='color:{color}'>{confidence:.1%}</span>", unsafe_allow_html=True)
 
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
+                st.markdown("### Feedback")
+                if st.session_state.feedback_text:
+                    st.markdown(st.session_state.feedback_text)
+                else:
+                    st.info("Show your hand to get feedback")
 
 class TranscriptionProcessor(VideoProcessorBase):
     def __init__(self):
