@@ -452,7 +452,7 @@ elif page == "Sign Language to Text":
 
 elif page == "Connect to a Mentor":
     st.title("🖐️ Connect to a Mentor")
-    
+
     mentors = {
         "Beginner": {
             "Alex": "Specializes in foundational signs and building confidence.",
@@ -468,36 +468,52 @@ elif page == "Connect to a Mentor":
         }
     }
 
+    user_level = st.session_state.get("user_level", "Beginner")
     st.markdown(
         f"""
         <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-            <h3>Your Current Level: <span style="color: #0f2f76;">{st.session_state.get("user_level","Beginner")}</span></h3>
+            <h3>Your Current Level: <span style="color: #0f2f76;">{user_level}</span></h3>
             <p>Usage Count: {st.session_state.get("usage_count",0)} sessions</p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    level_mentors = mentors.get(st.session_state.get("user_level","Beginner"), {})
-    selected_mentor = st.selectbox("Choose your mentor:", list(level_mentors.keys()))
-    preferred_time = st.select_slider("Select preferred time:", 
-                                      options=["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"])
-
-    if st.button("Schedule Session"):
-        st.session_state["usage_count"] = st.session_state.get("usage_count",0) + 1
-        st.success(f"✅ Session scheduled with {selected_mentor} at {preferred_time}")
-        st.balloons()
+    level_mentors = mentors.get(user_level, {})
+    
+    # Recommend a mentor based on user's learning level
+    # For simplicity, pick the first mentor in the dictionary as the recommended one
+    recommended_mentor = next(iter(level_mentors.keys()))
+    recommended_mentor_description = level_mentors.get(recommended_mentor, "")
 
     st.markdown(
         f"""
-        <div style="background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h3 style="color: #0f2f76;">About Your Mentor</h3>
-            <p style="font-size: 1.1rem;">{level_mentors.get(selected_mentor)}</p>
-            <p style="margin-top: 15px; color: #666;">Available for {st.session_state.get("user_level","Beginner")} level students</p>
+        <div style="background-color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="color: #0f2f76;">Recommended Mentor for Your Level</h3>
+            <p style="font-size: 1.1rem;">
+                Based on your current learning path <span style="color: #0f2f76; font-weight: 600;">({user_level})</span>,
+                we recommend connecting with <span style="color: #0f2f76; font-weight: 600;">{recommended_mentor}</span>.
+            </p>
+            <p style="font-size: 1.1rem;">{recommended_mentor_description}</p>
         </div>
         """,
         unsafe_allow_html=True
     )
+
+    # User can still choose a different mentor if desired
+    selected_mentor = st.selectbox("Choose your mentor:", list(level_mentors.keys()), index=0)
+
+    # Use a calendar input for selecting the date
+    preferred_date = st.date_input("Select Preferred Date:")
+
+    # Time selection from a dropdown
+    preferred_time = st.selectbox("Select Preferred Time:", ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"])
+
+    if st.button("Schedule Session"):
+        st.session_state["usage_count"] = st.session_state.get("usage_count", 0) + 1
+        st.success(f"✅ Session scheduled with {selected_mentor} on {preferred_date} at {preferred_time}")
+        st.balloons()
+
 
 # Add a universal footer for all pages
 st.markdown(
