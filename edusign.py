@@ -27,18 +27,18 @@ session_state_vars = {
     'real_time_confidence': None,
     'last_detection_time': time.time(),
     'target_gesture': None,
+    'debug_mode': False  # Ensure debug_mode is initialized
 }
 
-# Initialize all session states
 for var_name, default_value in session_state_vars.items():
     if var_name not in st.session_state:
         st.session_state[var_name] = default_value
 
 # Constants
 CONFIDENCE_THRESHOLD = 0.30  # Show gestures at 30% confidence
-MIN_CONFIDENCE = 0.20  # Show all gestures above 20%
+MIN_CONFIDENCE = 0.20        # Show all gestures above 20%
 TRANSCRIPTION_THRESHOLD = 0.30  # Add to transcription at 30%
-DISPLAY_THRESHOLD = 0.20  # Show detection feedback at 20%
+DISPLAY_THRESHOLD = 0.20        # Show detection feedback at 20%
 
 # Sidebar Navigation
 st.sidebar.markdown(
@@ -109,115 +109,28 @@ def get_color_for_confidence(confidence):
     elif confidence >= MIN_CONFIDENCE:
         return (0, 255, 255)  # Yellow
     else:
-        return (0, 0, 255)  # Red
+        return (0, 0, 255)    # Red
 
 def generate_feedback(prediction, confidence, target_gesture):
     if prediction is None:
         return "No hand detected. Please show your hand to the camera.", "info"
-    
+
+    if not target_gesture or target_gesture not in learning_guides:
+        return "No target gesture selected or invalid target gesture.", "info"
+
     feedback = f"Detected: {prediction} ({confidence:.1%})\n\n"
-    
+
     if confidence <= MIN_CONFIDENCE:
         feedback += f"Tips for '{target_gesture}':\n"
         for tip in learning_guides[target_gesture]["tips"]:
             feedback += f"• {tip}\n"
         return feedback, "error"
-        
     elif prediction != target_gesture:
         feedback += f"Trying to learn: '{target_gesture}'\n\n"
         feedback += "Remember these steps:\n"
         for step in learning_guides[target_gesture]["steps"]:
             feedback += f"• {step}\n"
         return feedback, "warning"
-        
-    else:
-        if confidence < CONFIDENCE_THRESHOLD:
-            feedback += "Getting better! Common mistakes to avoid:\n"
-            for mistake in learning_guides[target_gesture]["mistakes"]:
-                feedback += f"• {mistake}\n"
-            return feedback, "warning"
-        else:
-            feedback += "Great job! Keep practicing to maintain this level!"
-            return feedback, "success"
-
-
-@st.cache_resource
-def load_model():
-    model_url = "https://edusignstorage.blob.core.windows.net/model/sign_language_model_ver5.h5"
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as temp_file:
-            response = requests.get(model_url, stream=True)
-            response.raise_for_status()
-            for chunk in response.iter_content(chunk_size=8192):
-                temp_file.write(chunk)
-            temp_file_path = temp_file.name
-        model = tf.keras.models.load_model(temp_file_path)
-        if st.session_state.debug_mode:
-            print("Model loaded successfully!")
-        return model, True
-    except Exception as e:
-        if st.session_state.debug_mode:
-            print(f"Model loading error: {e}")
-        st.error(f"Failed to load model: {e}")
-        return None, False
-
-# Load model and setup
-gesture_model, model_loaded = load_model()
-
-# Gesture Classes
-gesture_classes = {0: "Hello", 1: "Thank You", 2: "Yes", 3: "No"}
-
-# Learning guides
-learning_guides = {
-    "Hello": {
-        "steps": ["Position hand near forehead", "Palm facing outward", "Extend fingers naturally", "Move hand away in arc"],
-        "tips": ["Keep movements fluid", "Maintain comfortable distance", "Practice slowly at first"],
-        "mistakes": ["Hand too far from forehead", "Movements too rigid", "Tense fingers"]
-    },
-    "Thank You": {
-        "steps": ["Hand near lips", "Fingers together, palm inward", "Extend thumb", "Move outward and down"],
-        "tips": ["Gentle motion", "Start near lips", "Smooth movement"],
-        "mistakes": ["Too far from lips", "Moving too sharp", "Wrong finger position"]
-    },
-    "Yes": {
-        "steps": ["Make a fist", "Position in front", "Move up and down"],
-        "tips": ["Keep relaxed", "Consistent rhythm", "Clear motion"],
-        "mistakes": ["Too exaggerated", "Hand too low", "Moving whole arm"]
-    },
-    "No": {
-        "steps": ["Form 'V' with fingers", "Palm outward", "Side-to-side motion"],
-        "tips": ["Control movement", "Straight fingers", "Near face"],
-        "mistakes": ["Too fast", "Spread fingers", "Hand too far"]
-    }
-}
-
-def get_color_for_confidence(confidence):
-    if confidence >= CONFIDENCE_THRESHOLD:
-        return (0, 255, 0)  # Green
-    elif confidence >= MIN_CONFIDENCE:
-        return (0, 255, 255)  # Yellow
-    else:
-        return (0, 0, 255)  # Red
-
-def generate_feedback(prediction, confidence, target_gesture):
-    if prediction is None:
-        return "No hand detected. Please show your hand to the camera.", "info"
-    
-    feedback = f"Detected: {prediction} ({confidence:.1%})\n\n"
-    
-    if confidence <= MIN_CONFIDENCE:
-        feedback += f"Tips for '{target_gesture}':\n"
-        for tip in learning_guides[target_gesture]["tips"]:
-            feedback += f"• {tip}\n"
-        return feedback, "error"
-        
-    elif prediction != target_gesture:
-        feedback += f"Trying to learn: '{target_gesture}'\n\n"
-        feedback += "Remember these steps:\n"
-        for step in learning_guides[target_gesture]["steps"]:
-            feedback += f"• {step}\n"
-        return feedback, "warning"
-        
     else:
         if confidence < CONFIDENCE_THRESHOLD:
             feedback += "Getting better! Common mistakes to avoid:\n"
@@ -248,12 +161,9 @@ class GestureTutorProcessor(VideoProcessorBase):
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
 
-        # Display target gesture
         target_gesture = st.session_state.target_gesture or "None"
         cv2.putText(img, f"Target: {target_gesture}", (10, 30),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-        current_time = time.time()
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
@@ -266,11 +176,10 @@ class GestureTutorProcessor(VideoProcessorBase):
                     self.mp_drawing_styles.get_default_hand_connections_style()
                 )
 
-                # Get hand region
                 h, w, _ = img.shape
                 x_coords = [lm.x * w for lm in hand_landmarks.landmark]
                 y_coords = [lm.y * h for lm in hand_landmarks.landmark]
-                
+
                 x_min, x_max = map(int, [min(x_coords), max(x_coords)])
                 y_min, y_max = map(int, [min(y_coords), max(y_coords)])
                 padding = 20
@@ -279,64 +188,46 @@ class GestureTutorProcessor(VideoProcessorBase):
                 y_min = max(0, y_min - padding)
                 y_max = min(h, y_max + padding)
 
-                # Process hand for gesture recognition
                 if x_min < x_max and y_min < y_max:
                     hand_img = rgb_frame[y_min:y_max, x_min:x_max]
                     hand_img = cv2.resize(hand_img, (224, 224))
                     hand_img = hand_img / 255.0
 
                     try:
-                        # Make prediction
                         pred = gesture_model.predict(np.expand_dims(hand_img, axis=0), verbose=0)
                         prediction = gesture_classes.get(np.argmax(pred))
                         confidence = float(np.max(pred))
 
-                        # Update session states for UI
                         st.session_state.current_prediction = prediction
                         st.session_state.current_confidence = confidence
 
-                        # Generate feedback based on prediction and confidence
-                        if confidence <= 0.3:
-                            st.session_state.feedback_text = (
-                                f"Keep practicing! Tips for '{target_gesture}':\n" +
-                                "\n".join([f"• {tip}" for tip in learning_guides[target_gesture]["tips"]]) +
-                                "\n\nCommon mistakes to avoid:\n" +
-                                "\n".join([f"• {mistake}" for mistake in learning_guides[target_gesture]["mistakes"]])
-                            )
-                        elif prediction != target_gesture:
-                            st.session_state.feedback_text = (
-                                f"You're showing '{prediction}' but trying to learn '{target_gesture}'.\n\n" +
-                                "Follow these steps:\n" +
-                                "\n".join([f"• {step}" for step in learning_guides[target_gesture]["steps"]])
-                            )
-                        else:
-                            st.session_state.feedback_text = (
-                                f"Excellent! Perfect '{target_gesture}' sign! ({confidence:.1%})\n\n" +
-                                "Keep practicing to maintain this level!"
-                            )
+                        # Generate feedback
+                        feedback_text, feedback_type = generate_feedback(prediction, confidence, st.session_state.target_gesture)
+                        st.session_state.feedback_text = feedback_text
 
-                        # Draw detection results on frame
-                        color = (0, 255, 0) if prediction == target_gesture and confidence > 0.3 else (0, 0, 255)
-                        
+                        # Choose box color based on accuracy
+                        color = (0, 255, 0) if (prediction == target_gesture and confidence > CONFIDENCE_THRESHOLD) else (0, 0, 255)
+
                         # Draw bounding box
                         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color, 2)
-                        
-                        # Draw detection text with background
+
+                        # Draw label
                         label = f"Detected: {prediction} ({confidence:.1%})"
                         (text_width, text_height), _ = cv2.getTextSize(
                             label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-                        cv2.rectangle(img, 
-                                    (x_min, y_min - text_height - 10),
-                                    (x_min + text_width, y_min),
-                                    (255, 255, 255),
-                                    -1)
+                        cv2.rectangle(img,
+                                      (x_min, y_min - text_height - 10),
+                                      (x_min + text_width, y_min),
+                                      (255, 255, 255),
+                                      -1)
                         cv2.putText(img, label, (x_min, y_min - 10),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
                     except Exception as e:
                         print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
+
 
 class TranscriptionProcessor(VideoProcessorBase):
     def __init__(self):
@@ -351,19 +242,18 @@ class TranscriptionProcessor(VideoProcessorBase):
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.last_prediction = None
         self.last_prediction_time = 0
-        self.cooldown = 1.0  # 1 second cooldown between predictions
+        self.cooldown = 1.0  # 1 second cooldown
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = self.hands.process(rgb_frame)
-        
+
         current_time = time.time()
 
-        # Always draw hand landmarks
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks with connections
+                # Draw landmarks
                 self.mp_draw.draw_landmarks(
                     img,
                     hand_landmarks,
@@ -372,18 +262,16 @@ class TranscriptionProcessor(VideoProcessorBase):
                     self.mp_drawing_styles.get_default_hand_connections_style()
                 )
 
-                # Process hand for transcription
                 h, w, _ = img.shape
                 x_coords = [lm.x * w for lm in hand_landmarks.landmark]
                 y_coords = [lm.y * h for lm in hand_landmarks.landmark]
-                
+
                 x_min, x_max = map(int, [min(x_coords), max(x_coords)])
                 y_min, y_max = map(int, [min(y_coords), max(y_coords)])
                 padding = 20
                 x_min, x_max = max(0, x_min - padding), min(w, x_max + padding)
                 y_min, y_max = max(0, y_min - padding), min(h, y_max + padding)
 
-                # Only process new predictions after cooldown
                 if current_time - self.last_prediction_time >= self.cooldown:
                     hand_img = rgb_frame[y_min:y_max, x_min:x_max]
                     hand_img = cv2.resize(hand_img, (224, 224))
@@ -394,13 +282,12 @@ class TranscriptionProcessor(VideoProcessorBase):
                         prediction = gesture_classes.get(np.argmax(pred))
                         confidence = float(np.max(pred))
 
-                        # Show current detection on video
                         label = f"{prediction}: {confidence:.1%}"
                         cv2.putText(img, label, (x_min, y_min - 10),
-                                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                        # Add to transcription if confidence is good and it's a new gesture
-                        if confidence > 0.3 and prediction != self.last_prediction:
+                        # Add to transcription if confident and a new gesture
+                        if confidence > TRANSCRIPTION_THRESHOLD and prediction != self.last_prediction:
                             st.session_state.transcription_text += f"{prediction} "
                             self.last_prediction = prediction
                             self.last_prediction_time = current_time
@@ -409,7 +296,6 @@ class TranscriptionProcessor(VideoProcessorBase):
                         print(f"Prediction error: {e}")
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
-
 
 
 # Page Implementations
@@ -459,14 +345,13 @@ elif page == "Sign Language Tutor":
         st.error("Model failed to load. Please check the URL and restart the application.")
     else:
         selected_gesture = st.selectbox("Select a word to learn:", list(gesture_classes.values()))
-        st.session_state.target_gesture = selected_gesture  # Update this instead of current_gesture
+        st.session_state.target_gesture = selected_gesture
 
         col1, col2 = st.columns(2)
 
         with col1:
             st.markdown("### Learning Guide")
-            
-            # YouTube video with matching size
+            # YouTube video embed
             st.markdown("""
                 <div style="width: 100%; padding-bottom: 75%; position: relative;">
                     <iframe 
@@ -496,7 +381,6 @@ elif page == "Sign Language Tutor":
             if webrtc_ctx.state.playing:
                 detection_container = st.container()
                 with detection_container:
-                    # Current Detection
                     st.markdown("### Current Detection")
                     cols = st.columns([1, 1])
                     with cols[0]:
@@ -506,33 +390,23 @@ elif page == "Sign Language Tutor":
                         )
                     with cols[1]:
                         confidence = st.session_state.current_confidence
-                        if confidence:
+                        if confidence is not None:
                             color = "red" if confidence <= CONFIDENCE_THRESHOLD else "green"
                             st.markdown(f'<p style="color: {color}; font-size: 1.2em;">Confidence: {confidence:.1%}</p>', 
-                                      unsafe_allow_html=True)
+                                        unsafe_allow_html=True)
 
-                    # Feedback
                     st.markdown("### EduSign AI's Feedback")
-                    if confidence and confidence <= CONFIDENCE_THRESHOLD:
-                        st.error(f"""
-                        Your confidence is low ({confidence:.1%}). Let's improve your '{selected_gesture}' sign:
-                        
-                        Common mistakes to avoid:
-                        {chr(10).join([f'- {m}' for m in guide['mistakes']])}
-                        
-                        Try these tips:
-                        {chr(10).join([f'- {t}' for t in guide['tips']])}
-                        """)
-                    elif st.session_state.current_prediction != selected_gesture:
-                        st.warning(f"""
-                        You're showing '{st.session_state.current_prediction}' 
-                        but trying to learn '{selected_gesture}'.
-                        
-                        Follow these steps:
-                        {chr(10).join([f'- {s}' for s in guide['steps']])}
-                        """)
-                    elif confidence:
-                        st.success(f"Great job! Perfect '{selected_gesture}' sign! ({confidence:.1%})")
+                    feedback = st.session_state.feedback_text
+                    if feedback:
+                        if "Great job" in feedback:
+                            st.success(feedback)
+                        elif "Getting better" in feedback:
+                            st.warning(feedback)
+                        elif "No hand detected" in feedback:
+                            st.info(feedback)
+                        else:
+                            # Default to warning if no clear cue
+                            st.warning(feedback)
                     else:
                         st.info("Show your hand to get feedback")
 
@@ -571,15 +445,6 @@ elif page == "Sign Language to Text":
             media_stream_constraints={"video": {"width": 640, "height": 480}, "audio": False}
         )
 
-        # Current detection display
-        if webrtc_ctx.state.playing:
-            if st.session_state.real_time_gesture and st.session_state.real_time_confidence:
-                st.markdown(
-                    f'<div class="detection-box">Currently Detecting: {st.session_state.real_time_gesture} '
-                    f'({st.session_state.real_time_confidence:.1%})</div>',
-                    unsafe_allow_html=True
-                )
-
     with col2:
         st.markdown("### Transcribed Text")
         st.markdown(
@@ -600,8 +465,9 @@ elif page == "Sign Language to Text":
 
         with button_col2:
             if st.button("Listen to Text"):
-                if st.session_state.transcription_text.strip():
-                    tts = gTTS(st.session_state.transcription_text.strip())
+                text_to_speak = st.session_state.transcription_text.strip()
+                if text_to_speak:
+                    tts = gTTS(text_to_speak)
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
                         tts.save(tmp_file.name)
                         with open(tmp_file.name, "rb") as audio_file:
@@ -640,14 +506,13 @@ elif page == "Connect to a Mentor":
     level_mentors = mentors.get(st.session_state.user_level, {})
     selected_mentor = st.selectbox("Choose your mentor:", list(level_mentors.keys()))
     preferred_time = st.select_slider("Select preferred time:", 
-                                    options=["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"])
+                                      options=["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM"])
 
     if st.button("Schedule Session"):
         st.session_state.usage_count += 1
         st.success(f"✅ Session scheduled with {selected_mentor} at {preferred_time}")
         st.balloons()
 
-    # Display mentor details and footer
     st.markdown(
         f"""
         <div style="background-color: white; padding: 20px; border-radius: 10px; margin-top: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
