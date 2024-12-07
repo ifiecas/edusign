@@ -520,10 +520,10 @@ st.markdown(
     <footer style="text-align: center; margin-top: 4rem; padding: 2rem; background-color: #f8f9fa; border-radius: 10px;">
         <div style="max-width: 800px; margin: 0 auto;">
             <p style="color: #0f2f76; font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem;">
-                Developed by Ivy Fiecas-Borjal
+                A Prototype Submission for Victoria University - Accessibility AI Hackathon 2024
             </p>
             <p style="color: #2a4494; font-size: 1rem; margin-bottom: 1rem;">
-                A Prototype Submission | Victoria University - Accessibility AI Hackathon 2024
+                Developed by Ivy Fiecas-Borjal
             </p>
             <a href="https://ifiecas.com/" target="_blank" style="display: inline-block; color: white; background-color: #0f2f76; padding: 0.5rem 1.5rem; border-radius: 25px; text-decoration: none;">View Portfolio</a>
         </div>
