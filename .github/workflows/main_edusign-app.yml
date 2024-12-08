@@ -17,12 +17,19 @@ jobs:
         with:
           python-version: '3.10'
 
-      # Conditionally install system packages if packages.txt exists
-      - name: Install system packages
+      # Conditionally install system packages from packages.txt
+      # If installing all packages (including python-dev) fails, retry without python-dev.
+      - name: Install system packages with fallback
         if: ${{ hashFiles('packages.txt') != '' }}
         run: |
           sudo apt-get update
-          xargs sudo apt-get install -y < packages.txt
+          # Try installing all packages including python-dev
+          if ! xargs sudo apt-get install -y < packages.txt; then
+            echo "Failed installing all packages including python-dev. Retrying without python-dev..."
+            # Remove python-dev from the list and retry
+            grep -v '^python-dev$' packages.txt > packages_without_python_dev.txt
+            sudo apt-get install -y $(cat packages_without_python_dev.txt)
+          fi
 
       - name: Install Python dependencies
         run: |
@@ -32,6 +39,6 @@ jobs:
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'edusign-app'  # Ensure this matches your Azure Web App name exactly
+          app-name: 'edusign-app'  # Ensure this matches your Azure Web App name
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISH_PROFILE }}
           package: '.'
