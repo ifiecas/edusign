@@ -12,59 +12,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v2
 
-      # Attempt to read the Python version from runtime.txt (expected format: python-3.50)
-      - name: Extract Python version
-        id: runtime
-        run: |
-          if [ -f "runtime.txt" ]; then
-            VERSION=$(cat runtime.txt | sed 's/python-//')
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            echo "No runtime.txt found, defaulting to 3.50"
-            echo "version=3.50" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Print Python version
-        run: echo "Python version (from runtime.txt) is ${{ steps.runtime.outputs.version }}"
-
-      # Manually install Python 3.50 from source
-      # Replace the URL below with the actual source location of python-3.50.
-      - name: Install Python 3.50
-        run: |
-          set -e
-          sudo apt-get update
-          sudo apt-get install -y wget build-essential libssl-dev libbz2-dev libreadline-dev libsqlite3-dev zlib1g-dev libffi-dev
-          echo "Downloading Python 3.50 source..."
-          wget https://example.com/path/to/python-3.50.tar.xz -O python-3.50.tar.xz
-          echo "Extracting Python 3.50 source..."
-          tar -xf python-3.50.tar.xz
-          cd python-3.50
-          echo "Configuring Python..."
-          ./configure --enable-optimizations
-          echo "Building Python..."
-          make -j"$(nproc)"
-          echo "Installing Python..."
-          sudo make altinstall
-          echo "Verifying Python version..."
-          python3.50 --version
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
 
       # Conditionally install system packages if packages.txt exists
       - name: Install system packages
         if: ${{ hashFiles('packages.txt') != '' }}
         run: |
           sudo apt-get update
-          cat packages.txt
           xargs sudo apt-get install -y < packages.txt
 
       - name: Install Python dependencies
         run: |
-          python3.50 -m ensurepip --upgrade
-          python3.50 -m pip install --upgrade pip
-          python3.50 -m pip install -r requirements.txt
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'edusign-app'  # Make sure this matches your Azure Web App name exactly
+          app-name: 'edusign-app'  # Ensure this matches your Azure Web App name exactly
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISH_PROFILE }}
           package: '.'
