@@ -12,28 +12,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v2
 
-      # Manually install Python 3.50 from source (placeholder example)
+      # Manually install Python 3.50
       - name: Install Python 3.50
         run: |
           sudo apt-get update
           sudo apt-get install -y wget build-essential libssl-dev libbz2-dev libreadline-dev libsqlite3-dev zlib1g-dev libffi-dev
-          # Replace URL below with a valid link to Python 3.50 source code tarball if one exists
+          # Replace with a valid URL for Python 3.50 source if it exists
           wget https://example.com/path/to/python-3.50.tar.xz
           tar -xf python-3.50.tar.xz
           cd python-3.50
           ./configure --enable-optimizations
-          make -j`nproc`
+          make -j"$(nproc)"
           sudo make altinstall
           python3.50 --version
 
-      # If packages.txt exists, install system-level packages
       - name: Install system packages
-        if: exists('packages.txt')
+        if: ${{ hashFiles('packages.txt') != '' }}
         run: |
           sudo apt-get update
           xargs sudo apt-get install -y < packages.txt
 
-      # Install Python dependencies using python3.50's pip
       - name: Install Python dependencies
         run: |
           python3.50 -m ensurepip --upgrade
@@ -43,6 +41,6 @@ jobs:
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'edusign-app'  # Ensure this matches exactly the name of your Azure Web App
+          app-name: 'edusign-app'  
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISH_PROFILE }}
           package: '.'
