@@ -24,6 +24,7 @@ jobs:
 
       - name: Package Application
         run: |
+          chmod +x setup.sh  # Make sure setup.sh is executable
           zip -r app.zip .  # Package all files for deployment
 
       - name: Deploy to Azure WebApp
