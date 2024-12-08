@@ -22,10 +22,10 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Package Application
+      - name: Prepare Deployment Package
         run: |
-          chmod +x setup.sh  # Make sure setup.sh is executable
-          zip -r app.zip .  # Package all files for deployment
+          chmod +x setup.sh
+          zip -r app.zip .
 
       - name: Deploy to Azure WebApp
         uses: azure/webapps-deploy@v2
